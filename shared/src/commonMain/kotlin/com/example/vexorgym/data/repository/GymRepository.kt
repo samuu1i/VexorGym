@@ -2,7 +2,7 @@ package com.example.vexorgym.data.repository
 
 import com.example.vexorgym.data.model.Exercise
 import com.example.vexorgym.data.model.Routine
-import com.example.vexorgym.data.model.WorkoutSet
+import com.example.vexorgym.data.model.WeekDay
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -14,10 +14,22 @@ interface GymRepository {
 
     fun observeRoutine(): Flow<Routine>
 
+    fun observeCatalog(): Flow<List<Exercise>>
+
     fun observeExercise(exerciseId: String): Flow<Exercise?>
 
-    /** Series ordenadas de más antigua a más reciente. */
-    fun observeSets(exerciseId: String): Flow<List<WorkoutSet>>
+    suspend fun addExerciseToDay(day: WeekDay, exerciseId: String): Result<Unit>
 
+    suspend fun createExerciseForDay(
+        day: WeekDay,
+        name: String,
+        muscleGroup: String,
+    ): Result<Unit>
+
+    suspend fun removeExerciseFromDay(day: WeekDay, exerciseId: String): Result<Unit>
+
+    suspend fun addSession(exerciseId: String): Result<Unit>
+
+    /** Agrega la serie a la sesión más reciente; si no hay ninguna, crea la primera. */
     suspend fun addSet(exerciseId: String, weightKg: Double, repetitions: Int): Result<Unit>
 }

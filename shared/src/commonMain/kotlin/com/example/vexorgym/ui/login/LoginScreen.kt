@@ -54,6 +54,8 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onLoginClick: () -> Unit,
 ) {
+    val hasError = uiState.errorMessage != null
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -76,6 +78,7 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Email") },
             singleLine = true,
+            isError = hasError,
             enabled = !uiState.isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
         )
@@ -86,13 +89,18 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Contraseña") },
             singleLine = true,
+            isError = hasError,
             enabled = !uiState.isLoading,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
         uiState.errorMessage?.let { message ->
             Spacer(Modifier.height(12.dp))
-            Text(message, color = MaterialTheme.colorScheme.error)
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         Spacer(Modifier.height(24.dp))
         Button(

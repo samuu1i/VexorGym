@@ -22,6 +22,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.vexorgym.data.model.WorkoutSession
 import com.example.vexorgym.data.model.WorkoutSet
 import com.example.vexorgym.di.AppContainer
 
@@ -52,6 +54,7 @@ fun ExerciseDetailRoute(
         onWeightChange = viewModel::onWeightChange,
         onRepsChange = viewModel::onRepsChange,
         onAddSet = viewModel::addSet,
+        onAddSession = viewModel::addSession,
     )
 }
 
@@ -63,6 +66,7 @@ fun ExerciseDetailScreen(
     onWeightChange: (String) -> Unit,
     onRepsChange: (String) -> Unit,
     onAddSet: () -> Unit,
+    onAddSession: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -108,13 +112,12 @@ fun ExerciseDetailScreen(
                         .fillMaxSize()
                         .padding(innerPadding),
                 ) {
-                    val lastSet = uiState.sets.lastOrNull()
                     Text(
                         text = uiState.muscleGroup,
                         modifier = Modifier.padding(horizontal = 16.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (lastSet != null) {
+                    uiState.lastSet?.let { lastSet ->
                         Text(
                             text = "Última serie: ${formatSet(lastSet)}",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -124,34 +127,35 @@ fun ExerciseDetailScreen(
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (uiState.sets.isEmpty()) {
+                        if (uiState.sessions.isEmpty()) {
                             item {
                                 Text(
-                                    "Todavía no hay series. Registrá la primera abajo.",
+                                    "Todavía no hay sesiones. Registrá la primera serie abajo.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         } else {
-                            itemsIndexed(uiState.sets, key = { _, set -> set.id }) { index, set ->
-                                Card(modifier = Modifier.fillMaxWidth()) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text("Serie ${index + 1}", style = MaterialTheme.typography.titleSmall)
-                                        Text(formatSet(set), style = MaterialTheme.typography.bodyLarge)
-                                    }
-                                }
+                            itemsIndexed(
+                                uiState.sessions,
+                                key = { _, session -> session.id },
+                            ) { index, session ->
+                                SessionCard(
+                                    sessionNumber = index + 1,
+                                    session = session,
+                                )
                             }
                         }
                     }
                     HorizontalDivider()
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Agregar serie", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Se suma a la sesión más reciente.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
@@ -180,8 +184,50 @@ fun ExerciseDetailScreen(
                             onClick = onAddSet,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Agregar Serie")
+                            Text("Agregar serie")
                         }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onAddSession,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Nueva sesión")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionCard(
+    sessionNumber: Int,
+    session: WorkoutSession,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Sesión $sessionNumber",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            if (session.sets.isEmpty()) {
+                Text(
+                    "Sin series todavía.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                session.sets.forEachIndexed { index, set ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Serie ${index + 1}", style = MaterialTheme.typography.titleSmall)
+                        Text(formatSet(set), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }

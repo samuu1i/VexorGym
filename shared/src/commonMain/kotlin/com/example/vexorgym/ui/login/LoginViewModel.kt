@@ -27,9 +27,18 @@ class LoginViewModel(
     fun login() {
         val current = _uiState.value
         if (current.isLoading) return
+
+        val email = current.email.trim()
+        val password = current.password
+        val validationError = validateCredentials(email, password)
+        if (validationError != null) {
+            _uiState.update { it.copy(errorMessage = validationError) }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            repository.login(current.email, current.password)
+            repository.login(email, password)
                 .onSuccess {
                     _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
@@ -42,5 +51,15 @@ class LoginViewModel(
                     }
                 }
         }
+    }
+
+    private fun validateCredentials(email: String, password: String): String? = when {
+        !EMAIL_REGEX.matches(email) -> "Ingresá un email con formato válido."
+        password.isBlank() -> "La contraseña no puede estar vacía."
+        else -> null
+    }
+
+    private companion object {
+        val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
     }
 }

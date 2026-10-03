@@ -6,7 +6,6 @@ import com.example.vexorgym.data.repository.GymRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -20,25 +19,21 @@ class ExerciseDetailViewModel(
 
     init {
         viewModelScope.launch {
-            combine(
-                repository.observeExercise(exerciseId),
-                repository.observeSets(exerciseId),
-            ) { exercise, sets -> exercise to sets }
-                .collect { (exercise, sets) ->
-                    _uiState.update { current ->
-                        if (exercise == null) {
-                            current.copy(isLoading = false, notFound = true)
-                        } else {
-                            current.copy(
-                                isLoading = false,
-                                notFound = false,
-                                exerciseName = exercise.name,
-                                muscleGroup = exercise.muscleGroup,
-                                sets = sets,
-                            )
-                        }
+            repository.observeExercise(exerciseId).collect { exercise ->
+                _uiState.update { current ->
+                    if (exercise == null) {
+                        current.copy(isLoading = false, notFound = true)
+                    } else {
+                        current.copy(
+                            isLoading = false,
+                            notFound = false,
+                            exerciseName = exercise.name,
+                            muscleGroup = exercise.muscleGroup,
+                            sessions = exercise.sessions,
+                        )
                     }
                 }
+            }
         }
     }
 
@@ -48,6 +43,17 @@ class ExerciseDetailViewModel(
 
     fun onRepsChange(value: String) {
         _uiState.update { it.copy(repsInput = value, formError = null) }
+    }
+
+    fun addSession() {
+        viewModelScope.launch {
+            repository.addSession(exerciseId)
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(formError = error.message ?: "No se pudo crear la sesión.")
+                    }
+                }
+        }
     }
 
     fun addSet() {
