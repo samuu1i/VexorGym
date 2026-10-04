@@ -210,11 +210,42 @@ class RemoteGymRepository(
     }
 
     override suspend fun removeExerciseFromDay(day: WeekDay, exerciseId: String): Result<Unit> {
-        routineMeta.update { current ->
-            val ids = current.exerciseIdsByDay[day].orEmpty().filterNot { it == exerciseId }
-            current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to ids))
+        val opKey = "delExercise_$exerciseId"
+        if (!acquireOp(opKey)) return Result.success(Unit)
+        
+        // 1. Encontramos la rutina actual y preparamos el nuevo estado sin el ID a borrar
+        val currentMeta = routineMeta.value
+        val currentIdsForDay = currentMeta.exerciseIdsByDay[day].orEmpty()
+        if (exerciseId !in currentIdsForDay) {
+            releaseOp(opKey)
+            return Result.success(Unit) // Ya no está
         }
-        return Result.success(Unit)
+        
+        val newIdsForDay = currentIdsForDay.filterNot { it == exerciseId }
+        val newMeta = currentMeta.copy(
+            exerciseIdsByDay = currentMeta.exerciseIdsByDay + (day to newIdsForDay)
+        )
+        
+        // 2. Actualización optimista
+        routineMeta.value = newMeta
+        
+        return try {
+            // Borramos el ejercicio de la base de datos de Supabase.
+            // Gracias a ON DELETE CASCADE, también se borran sus sesiones y series.
+            client.from("exercises").delete { filter { eq("id", exerciseId) } }
+            
+            // Si la base de datos respondió OK, eliminamos localmente del caché para no verlo más
+            mutex.withLock {
+                exercisesCache.update { current -> current - exerciseId }
+            }
+            Result.success(Unit)
+        } catch (error: Exception) {
+            // 3. Rollback
+            routineMeta.value = currentMeta
+            Result.failure(Exception("Error al eliminar el ejercicio: ${error.message}"))
+        } finally {
+            releaseOp(opKey)
+        }
     }
 
     override suspend fun addSession(exerciseId: String): Result<Unit> {

@@ -330,9 +330,9 @@ private fun ExerciseCard(
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
 
     val lastSession = exercise.sessions.maxByOrNull { it.createdAtMillis }
-    val lastSessionInfo = lastSession?.sets?.maxByOrNull { it.weightKg }?.let { bestSet ->
-        val weightStr = if (bestSet.weightKg % 1.0 == 0.0) bestSet.weightKg.toInt().toString() else bestSet.weightKg.toString()
-        "Última: ${weightStr}kg × ${bestSet.repetitions}"
+    val lastSessionInfo = lastSession?.sets?.maxByOrNull { it.id }?.let { lastSet ->
+        val weightStr = if (lastSet.weightKg % 1.0 == 0.0) lastSet.weightKg.toInt().toString() else lastSet.weightKg.toString()
+        "Última: ${weightStr}kg × ${lastSet.repetitions}"
     }
 
     Card(
