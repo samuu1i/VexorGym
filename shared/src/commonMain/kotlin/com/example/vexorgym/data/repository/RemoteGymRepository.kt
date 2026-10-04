@@ -8,6 +8,8 @@ import com.example.vexorgym.data.supabaseClient
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.exceptions.HttpRequestException
+import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.Flow
@@ -73,6 +75,13 @@ class RemoteGymRepository(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private fun handleNetworkError(e: Exception, fallbackMessage: String): Exception {
+        return when (e) {
+            is HttpRequestException, is kotlinx.io.IOException -> Exception("No hay conexión a Internet. Verificá tu conexión e intentá nuevamente.")
+            is RestException -> Exception("$fallbackMessage: ${e.error}")
+            else -> Exception("$fallbackMessage: ${e.message}")
+        }
+    }
     override suspend fun login(email: String, password: String): Result<Unit> {
         return try {
             client.auth.signInWith(Email) {
@@ -82,6 +91,9 @@ class RemoteGymRepository(
             refreshAll(force = true)
             Result.success(Unit)
         } catch (e: Exception) {
+            if (e is HttpRequestException || e is kotlinx.io.IOException) {
+                return Result.failure(Exception("No hay conexión a Internet. Verificá tu conexión e intentá nuevamente."))
+            }
             val msg = e.message ?: ""
             val userError = if ("Email not confirmed" in msg || "not confirmed" in msg) {
                 "Debes confirmar tu correo antes de iniciar sesión."
@@ -109,7 +121,7 @@ class RemoteGymRepository(
             }
             Result.success(hasSession)
         } catch (e: Exception) {
-            Result.failure(Exception("Error al registrarse: ${e.message}"))
+            Result.failure(handleNetworkError(e, "Error al registrarse"))
         }
     }
 
@@ -224,7 +236,7 @@ class RemoteGymRepository(
             saveRoutine(newMapToSave!!)
             Result.success(Unit)
         } catch (error: Exception) {
-            Result.failure(Exception("Error al crear el ejercicio: ${error.message}"))
+            Result.failure(handleNetworkError(error, "Error al crear el ejercicio"))
         }
     }
 
@@ -261,9 +273,8 @@ class RemoteGymRepository(
             saveRoutine(newMap)
             Result.success(Unit)
         } catch (error: Exception) {
-            // 3. Rollback
             routineMeta.value = currentMeta
-            Result.failure(Exception("Error al eliminar el ejercicio: ${error.message}"))
+            Result.failure(handleNetworkError(error, "Error al eliminar el ejercicio"))
         } finally {
             releaseOp(opKey)
         }
@@ -279,8 +290,7 @@ class RemoteGymRepository(
             client.from("user_routines").upsert(UserRoutine(userId = uid, routineData = newMap))
             Result.success(Unit)
         } catch (e: Exception) {
-            routineMeta.value = currentMeta
-            Result.failure(Exception("Error al guardar el orden: ${e.message}"))
+            Result.failure(handleNetworkError(e, "Error al guardar el orden"))
         }
     }
 
@@ -318,7 +328,7 @@ class RemoteGymRepository(
                     cache + (exerciseId to exercise.copy(sessions = rolledBackSessions))
                 }
             }
-            Result.failure(Exception("Error al crear la sesión: ${error.message}"))
+            Result.failure(handleNetworkError(error, "Error al crear la sesión"))
         } finally {
             releaseOp(opKey)
         }
@@ -360,7 +370,7 @@ class RemoteGymRepository(
                     cache + (exerciseId to exercise.copy(sessions = rolledBackSessions))
                 }
             }
-            Result.failure(Exception("Error al eliminar la sesión: ${error.message}"))
+            Result.failure(handleNetworkError(error, "Error al eliminar la sesión"))
         } finally {
             releaseOp(opKey)
         }
@@ -423,7 +433,7 @@ class RemoteGymRepository(
                     cache + (exerciseId to exercise.copy(sessions = updatedSessions))
                 }
             }
-            Result.failure(Exception("Error al agregar la serie: ${error.message}"))
+            Result.failure(handleNetworkError(error, "Error al agregar la serie"))
         } finally {
             releaseOp(opKey)
         }
@@ -483,7 +493,7 @@ class RemoteGymRepository(
                     cache + (exerciseId to exercise.copy(sessions = updatedSessions))
                 }
             }
-            Result.failure(Exception("Error al eliminar la serie: ${error.message}"))
+            Result.failure(handleNetworkError(error, "Error al eliminar la serie"))
         } finally {
             releaseOp(opKey)
         }
