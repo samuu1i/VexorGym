@@ -21,7 +21,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,10 +52,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.vexorgym.data.model.WorkoutSession
 import com.example.vexorgym.data.model.WorkoutSet
 import com.example.vexorgym.di.AppContainer
-import kotlin.time.Instant
 
 import androidx.compose.runtime.LaunchedEffect
 import kotlin.time.Clock
+
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 @Composable
 fun ExerciseDetailRoute(
@@ -93,6 +103,7 @@ fun ExerciseDetailScreen(
     onDeleteSession: (sessionId: String) -> Unit,
 ) {
     var sessionPendingDelete by remember { mutableStateOf<WorkoutSession?>(null) }
+    var setPendingDelete by remember { mutableStateOf<Pair<String, String>?>(null) } // sessionId to setId
 
     Scaffold(
         topBar = {
@@ -167,16 +178,49 @@ fun ExerciseDetailScreen(
                                 uiState.sessions,
                                 key = { _, session -> session.id },
                             ) { index, session ->
-                                SessionCard(
-                                    sessionNumber = index + 1,
-                                    session = session,
-                                    draft = uiState.draftFor(session.id),
-                                    onWeightChange = { onWeightChange(session.id, it) },
-                                    onRepsChange = { onRepsChange(session.id, it) },
-                                    onAddSet = { onAddSet(session.id) },
-                                    onDeleteSet = { onDeleteSet(session.id, it) },
-                                    onDeleteSession = { sessionPendingDelete = session },
+                                val dismissState = rememberSwipeToDismissBoxState(
+                                    confirmValueChange = {
+                                        if (it == SwipeToDismissBoxValue.EndToStart) {
+                                            sessionPendingDelete = session
+                                            return@rememberSwipeToDismissBoxState false
+                                        }
+                                        false
+                                    }
                                 )
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    enableDismissFromStartToEnd = false,
+                                    backgroundContent = {
+                                        val color = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                            MaterialTheme.colorScheme.errorContainer
+                                        } else {
+                                            Color.Transparent
+                                        }
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(color, MaterialTheme.shapes.medium)
+                                                .padding(16.dp),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                                Icon(Icons.Filled.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.onErrorContainer)
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    SessionCard(
+                                        sessionNumber = index + 1,
+                                        session = session,
+                                        draft = uiState.draftFor(session.id),
+                                        onWeightChange = { onWeightChange(session.id, it) },
+                                        onRepsChange = { onRepsChange(session.id, it) },
+                                        onAddSet = { onAddSet(session.id) },
+                                        onDeleteSet = { setId -> setPendingDelete = session.id to setId },
+                                        onDeleteSession = { sessionPendingDelete = session },
+                                    )
+                                }
                             }
                         }
                     }
@@ -228,6 +272,23 @@ fun ExerciseDetailScreen(
             },
         )
     }
+
+    setPendingDelete?.let { (sessionId, setId) ->
+        AlertDialog(
+            onDismissRequest = { setPendingDelete = null },
+            title = { Text("Eliminar serie") },
+            text = { Text("¿Estás seguro de que querés eliminar esta serie?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteSet(sessionId, setId)
+                    setPendingDelete = null
+                }) { Text("Eliminar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { setPendingDelete = null }) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -241,7 +302,10 @@ private fun SessionCard(
     onDeleteSet: (setId: String) -> Unit,
     onDeleteSession: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
         Column(modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -276,22 +340,49 @@ private fun SessionCard(
                 )
             } else {
                 session.sets.forEachIndexed { index, set ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text("Serie ${index + 1}", style = MaterialTheme.typography.titleSmall)
-                            Text(formatSet(set), style = MaterialTheme.typography.bodyLarge)
+                    val dismissSetState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = {
+                            if (it == SwipeToDismissBoxValue.EndToStart) {
+                                onDeleteSet(set.id)
+                                return@rememberSwipeToDismissBoxState false
+                            }
+                            false
                         }
-                        IconButton(onClick = { onDeleteSet(set.id) }) {
-                            Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = "Eliminar serie ${index + 1}",
-                                tint = MaterialTheme.colorScheme.error,
-                            )
+                    )
+                    SwipeToDismissBox(
+                        state = dismissSetState,
+                        enableDismissFromStartToEnd = false,
+                        backgroundContent = {
+                            val color = if (dismissSetState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                MaterialTheme.colorScheme.errorContainer
+                            } else {
+                                Color.Transparent
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .background(color)
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                if (dismissSetState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                    Icon(Icons.Filled.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+                            }
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(vertical = 4.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Serie ${index + 1}", style = MaterialTheme.typography.titleSmall)
+                                Text(formatSet(set), style = MaterialTheme.typography.bodyLarge)
+                            }
                         }
                     }
                 }
@@ -358,8 +449,9 @@ private fun formatSet(set: WorkoutSet): String {
 }
 
 private fun formatSessionDate(createdAtMillis: Long): String {
-    val iso = Instant.fromEpochMilliseconds(createdAtMillis).toString()
-    val datePart = iso.substringBefore('T')
-    val timePart = iso.substringAfter('T').take(5)
+    val instant = Instant.fromEpochMilliseconds(createdAtMillis)
+    val localDateTime = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+    val datePart = localDateTime.date.toString()
+    val timePart = localDateTime.time.toString().take(5)
     return "$datePart · $timePart"
 }

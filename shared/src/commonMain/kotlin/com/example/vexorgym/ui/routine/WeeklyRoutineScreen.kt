@@ -1,6 +1,8 @@
 package com.example.vexorgym.ui.routine
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,14 +16,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -32,9 +42,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -83,6 +98,12 @@ fun WeeklyRoutineScreen(
     onLogoutClick: () -> Unit,
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var exercisePendingDelete by remember { mutableStateOf<String?>(null) }
+    var localExercises by remember(uiState.selectedExercises) { mutableStateOf(uiState.selectedExercises) }
+    
+    val listState = rememberLazyListState()
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
 
     Scaffold(
         topBar = {
@@ -127,7 +148,7 @@ fun WeeklyRoutineScreen(
                 }
             }
 
-            val exercises = uiState.selectedExercises
+            val exercises = localExercises
             if (exercises.isEmpty()) {
                 Column(
                     modifier = Modifier
@@ -146,16 +167,93 @@ fun WeeklyRoutineScreen(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(exercises, key = { it.id }) { exercise ->
-                        ExerciseCard(
-                            exercise = exercise,
-                            onClick = { onExerciseClick(exercise.id) },
-                            onRemove = { onRemoveExercise(exercise.id) },
+                    itemsIndexed(exercises, key = { _, ex -> ex.id }) { index, exercise ->
+                        
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = {
+                                if (it == SwipeToDismissBoxValue.EndToStart) {
+                                    exercisePendingDelete = exercise.id
+                                    return@rememberSwipeToDismissBoxState false
+                                }
+                                false
+                            }
                         )
+
+                        val isDragging = index == draggingIndex
+                        val modifier = if (isDragging) {
+                            Modifier
+                                .zIndex(1f)
+                                .graphicsLayer { translationY = dragOffset }
+                        } else {
+                            Modifier.zIndex(0f)
+                        }
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            modifier = modifier,
+                            backgroundContent = {
+                                val color = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                    MaterialTheme.colorScheme.errorContainer
+                                } else {
+                                    Color.Transparent
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(color, MaterialTheme.shapes.medium)
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.onErrorContainer)
+                                    }
+                                }
+                            }
+                        ) {
+                            ExerciseCard(
+                                exercise = exercise,
+                                onClick = { onExerciseClick(exercise.id) },
+                                onDragStart = { draggingIndex = index },
+                                onDragEnd = {
+                                    draggingIndex = null
+                                    dragOffset = 0f
+                                },
+                                onDrag = { dragAmount ->
+                                    dragOffset += dragAmount
+                                    
+                                    val currentIdx = draggingIndex ?: return@ExerciseCard
+                                    val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                    val draggingItemInfo = visibleItems.find { it.index == currentIdx } ?: return@ExerciseCard
+                                    
+                                    val draggingItemCenter = draggingItemInfo.offset + (draggingItemInfo.size / 2) + dragOffset
+                                    
+                                    val targetItem = visibleItems.find { 
+                                        it.index != currentIdx && 
+                                        draggingItemCenter > it.offset && 
+                                        draggingItemCenter < it.offset + it.size
+                                    }
+                                    
+                                    if (targetItem != null) {
+                                        val targetIndex = targetItem.index
+                                        val newList = localExercises.toMutableList()
+                                        val tmp = newList[currentIdx]
+                                        newList[currentIdx] = newList[targetIndex]
+                                        newList[targetIndex] = tmp
+                                        localExercises = newList
+                                        
+                                        draggingIndex = targetIndex
+                                        dragOffset += draggingItemInfo.offset - targetItem.offset
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -199,18 +297,49 @@ fun WeeklyRoutineScreen(
             },
         )
     }
+
+    exercisePendingDelete?.let { exId ->
+        AlertDialog(
+            onDismissRequest = { exercisePendingDelete = null },
+            title = { Text("Eliminar ejercicio") },
+            text = { Text("¿Estás seguro de que querés eliminar este ejercicio?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemoveExercise(exId)
+                    exercisePendingDelete = null
+                }) { Text("Eliminar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { exercisePendingDelete = null }) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
 private fun ExerciseCard(
     exercise: Exercise,
     onClick: () -> Unit,
-    onRemove: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+
+    val lastSession = exercise.sessions.maxByOrNull { it.createdAtMillis }
+    val lastSessionInfo = lastSession?.sets?.maxByOrNull { it.weightKg }?.let { bestSet ->
+        val weightStr = if (bestSet.weightKg % 1.0 == 0.0) bestSet.weightKg.toInt().toString() else bestSet.weightKg.toString()
+        "Última: ${weightStr}kg × ${bestSet.repetitions}"
+    }
+
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -221,19 +350,39 @@ private fun ExerciseCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(exercise.name, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    exercise.muscleGroup,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        exercise.muscleGroup,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (lastSessionInfo != null) {
+                        Text(
+                            text = " · $lastSessionInfo",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
-            IconButton(onClick = onRemove) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = "Eliminar ${exercise.name}",
-                    tint = MaterialTheme.colorScheme.error,
-                )
-            }
+            Icon(
+                Icons.Filled.DragHandle,
+                contentDescription = "Reordenar",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragStart = { currentOnDragStart() },
+                            onDragEnd = { currentOnDragEnd() },
+                            onDragCancel = { currentOnDragEnd() },
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                currentOnDrag(dragAmount)
+                            }
+                        )
+                    }
+            )
         }
     }
 }
