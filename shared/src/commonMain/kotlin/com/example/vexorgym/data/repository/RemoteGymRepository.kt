@@ -143,8 +143,13 @@ class RemoteGymRepository(
     }
 
     override suspend fun hasValidSession(): Boolean {
-        client.auth.awaitInitialization()
-        return client.auth.currentSessionOrNull() != null
+        return try {
+            client.auth.awaitInitialization()
+            client.auth.currentSessionOrNull() != null
+        } catch (e: Exception) {
+            println("Error al validar sesión en inicio (posible falta de red): ${e.message}")
+            false
+        }
     }
 
     override fun observeRoutine(): Flow<Routine> = flow {
@@ -545,7 +550,9 @@ class RemoteGymRepository(
                 if (!cacheLoaded) {
                     exercisesCache.value = emptyMap()
                 }
-                throw error
+                // En vez de crashear la app propagando la excepción (throw error), 
+                // solo informamos el estado para que la UI se renderice vacía o con error controlado.
+                println("Error en refreshAll: ${error.message}")
             } finally {
                 _isLoading.value = false
             }
