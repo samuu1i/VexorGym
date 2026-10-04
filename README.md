@@ -305,7 +305,7 @@ Se recomienda incluir capturas de las principales pantallas:
 
 La versión Android instalable se encuentra disponible en la sección **Releases** de este repositorio.
 
-[Descargar última versión](https://github.com/TU_USUARIO/VexorGym/releases/latest)
+[Descargar última versión][(https://github.com/TU_USUARIO/VexorGym/releases/latest)](https://github.com/samuu1i/VexorGym/releases/tag/v1.0.0)
 
 ## 🔮 Posibles mejoras futuras
 
