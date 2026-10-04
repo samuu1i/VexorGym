@@ -41,6 +41,28 @@ class RemoteGymRepository(
         ),
     )
 
+    private val activeOperations = Mutex()
+    private val inFlight = mutableSetOf<String>()
+
+    private suspend fun acquireOp(key: String): Boolean = activeOperations.withLock {
+        if (inFlight.contains(key)) false else { inFlight.add(key); true }
+    }
+    private suspend fun releaseOp(key: String) = activeOperations.withLock {
+        inFlight.remove(key)
+    }
+
+    private fun generateUUID(): String {
+        val chars = "0123456789abcdef"
+        return CharArray(36) { i ->
+            when (i) {
+                8, 13, 18, 23 -> '-'
+                14 -> '4'
+                19 -> chars[kotlin.random.Random.nextInt(4) + 8]
+                else -> chars[kotlin.random.Random.nextInt(16)]
+            }
+        }.concatToString()
+    }
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -168,16 +190,22 @@ class RemoteGymRepository(
             return Result.failure(IllegalArgumentException("El nombre del ejercicio no puede estar vacío."))
         }
         val finalGroup = muscleGroup.trim().ifEmpty { "General" }
-        return mutate {
+        return try {
             val created = client.from("exercises")
                 .insert(ExerciseInsert(name = trimmedName, muscleGroup = finalGroup)) {
                     select()
                 }
                 .decodeSingle<Exercise>()
-            val ids = routineMeta.value.exerciseIdsByDay[day].orEmpty()
-            routineMeta.update { current ->
-                current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to ids + created.id))
+            mutex.withLock {
+                exercisesCache.update { cache -> cache + (created.id to created) }
+                val ids = routineMeta.value.exerciseIdsByDay[day].orEmpty()
+                routineMeta.update { current ->
+                    current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to ids + created.id))
+                }
             }
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(Exception("Error al crear el ejercicio: ${error.message}"))
         }
     }
 
@@ -189,13 +217,85 @@ class RemoteGymRepository(
         return Result.success(Unit)
     }
 
-    override suspend fun addSession(exerciseId: String): Result<Unit> = mutate {
-        client.from("sessions").insert(SessionInsert(exerciseId = exerciseId))
+    override suspend fun addSession(exerciseId: String): Result<Unit> {
+        val opKey = "addSession_$exerciseId"
+        if (!acquireOp(opKey)) return Result.success(Unit) // Evitar doble click
+
+        val sessionId = generateUUID()
+        val optimisticSession = WorkoutSession(
+            id = sessionId,
+            exerciseId = exerciseId,
+            dateCreated = kotlin.time.Clock.System.now().toString(),
+            sets = emptyList()
+        )
+
+        // 1. Actualización Optimista local instantánea
+        mutex.withLock {
+            exercisesCache.update { cache ->
+                val exercise = cache[exerciseId] ?: return@update cache
+                val updatedSessions = exercise.sessions + optimisticSession
+                cache + (exerciseId to exercise.copy(sessions = updatedSessions.sortedBy { it.createdAtMillis }))
+            }
+        }
+
+        return try {
+            // 2. Operación de red en segundo plano (sin decodeSingle, fire-and-forget con confirmación)
+            client.from("sessions").insert(SessionInsert(id = sessionId, exerciseId = exerciseId))
+            Result.success(Unit)
+        } catch (error: Exception) {
+            // 3. Rollback exacto en caso de fallo (RLS, Red, etc)
+            mutex.withLock {
+                exercisesCache.update { cache ->
+                    val exercise = cache[exerciseId] ?: return@update cache
+                    val rolledBackSessions = exercise.sessions.filterNot { it.id == sessionId }
+                    cache + (exerciseId to exercise.copy(sessions = rolledBackSessions))
+                }
+            }
+            Result.failure(Exception("Error al crear la sesión: ${error.message}"))
+        } finally {
+            releaseOp(opKey)
+        }
     }
 
-    override suspend fun deleteSession(exerciseId: String, sessionId: String): Result<Unit> = mutate {
-        client.from("sessions").delete {
-            filter { eq("id", sessionId) }
+    override suspend fun deleteSession(exerciseId: String, sessionId: String): Result<Unit> {
+        val opKey = "delSession_$sessionId"
+        if (!acquireOp(opKey)) return Result.success(Unit)
+
+        var deletedSession: WorkoutSession? = null
+        
+        // 1. Actualización Optimista
+        mutex.withLock {
+            exercisesCache.update { cache ->
+                val exercise = cache[exerciseId] ?: return@update cache
+                deletedSession = exercise.sessions.find { it.id == sessionId }
+                if (deletedSession == null) return@update cache
+                val updatedSessions = exercise.sessions.filterNot { it.id == sessionId }
+                cache + (exerciseId to exercise.copy(sessions = updatedSessions))
+            }
+        }
+
+        val capturedSession = deletedSession
+        if (capturedSession == null) {
+            releaseOp(opKey)
+            return Result.success(Unit)
+        }
+
+        return try {
+            // 2. Red
+            client.from("sessions").delete { filter { eq("id", sessionId) } }
+            Result.success(Unit)
+        } catch (error: Exception) {
+            // 3. Rollback: Volvemos a insertar la sesión eliminada optimísticamente
+            mutex.withLock {
+                exercisesCache.update { cache ->
+                    val exercise = cache[exerciseId] ?: return@update cache
+                    val rolledBackSessions = (exercise.sessions + capturedSession).sortedBy { it.createdAtMillis }
+                    cache + (exerciseId to exercise.copy(sessions = rolledBackSessions))
+                }
+            }
+            Result.failure(Exception("Error al eliminar la sesión: ${error.message}"))
+        } finally {
+            releaseOp(opKey)
         }
     }
 
@@ -208,14 +308,56 @@ class RemoteGymRepository(
         if (weightKg < 0 || repetitions <= 0) {
             return Result.failure(IllegalArgumentException("Peso y repeticiones deben ser válidos."))
         }
-        return mutate {
+        val opKey = "addSet_$sessionId"
+        if (!acquireOp(opKey)) return Result.success(Unit)
+
+        val setId = generateUUID()
+        val optimisticSet = com.example.vexorgym.data.model.WorkoutSet(
+            id = setId,
+            sessionId = sessionId,
+            weightKg = weightKg,
+            repetitions = repetitions
+        )
+
+        // 1. Actualización Optimista
+        mutex.withLock {
+            exercisesCache.update { cache ->
+                val exercise = cache[exerciseId] ?: return@update cache
+                val updatedSessions = exercise.sessions.map { session ->
+                    if (session.id == sessionId) {
+                        session.copy(sets = (session.sets + optimisticSet).sortedBy { it.id })
+                    } else {
+                        session
+                    }
+                }
+                cache + (exerciseId to exercise.copy(sessions = updatedSessions))
+            }
+        }
+
+        return try {
+            // 2. Red
             client.from("sets").insert(
-                SetInsert(
-                    sessionId = sessionId,
-                    weight = weightKg,
-                    reps = repetitions,
-                ),
+                SetInsert(id = setId, sessionId = sessionId, weight = weightKg, reps = repetitions)
             )
+            Result.success(Unit)
+        } catch (error: Exception) {
+            // 3. Rollback
+            mutex.withLock {
+                exercisesCache.update { cache ->
+                    val exercise = cache[exerciseId] ?: return@update cache
+                    val updatedSessions = exercise.sessions.map { session ->
+                        if (session.id == sessionId) {
+                            session.copy(sets = session.sets.filterNot { it.id == setId })
+                        } else {
+                            session
+                        }
+                    }
+                    cache + (exerciseId to exercise.copy(sessions = updatedSessions))
+                }
+            }
+            Result.failure(Exception("Error al agregar la serie: ${error.message}"))
+        } finally {
+            releaseOp(opKey)
         }
     }
 
@@ -223,25 +365,59 @@ class RemoteGymRepository(
         exerciseId: String,
         sessionId: String,
         setId: String,
-    ): Result<Unit> = mutate {
-        client.from("sets").delete {
-            filter { eq("id", setId) }
-        }
-    }
+    ): Result<Unit> {
+        val opKey = "delSet_$setId"
+        if (!acquireOp(opKey)) return Result.success(Unit)
 
-    private suspend fun mutate(block: suspend () -> Unit): Result<Unit> {
+        var deletedSet: com.example.vexorgym.data.model.WorkoutSet? = null
+
+        // 1. Actualización Optimista
+        mutex.withLock {
+            exercisesCache.update { cache ->
+                val exercise = cache[exerciseId] ?: return@update cache
+                val sessionTarget = exercise.sessions.find { it.id == sessionId }
+                deletedSet = sessionTarget?.sets?.find { it.id == setId }
+                if (deletedSet == null) return@update cache
+
+                val updatedSessions = exercise.sessions.map { session ->
+                    if (session.id == sessionId) {
+                        session.copy(sets = session.sets.filterNot { it.id == setId })
+                    } else {
+                        session
+                    }
+                }
+                cache + (exerciseId to exercise.copy(sessions = updatedSessions))
+            }
+        }
+
+        val capturedSet = deletedSet
+        if (capturedSet == null) {
+            releaseOp(opKey)
+            return Result.success(Unit)
+        }
+
         return try {
-            _isLoading.value = true
-            _error.value = null
-            block()
-            refreshAll(force = true)
+            // 2. Red
+            client.from("sets").delete { filter { eq("id", setId) } }
             Result.success(Unit)
         } catch (error: Exception) {
-            val message = error.message ?: "Error al hablar con Supabase."
-            _error.value = message
-            Result.failure(error)
+            // 3. Rollback
+            mutex.withLock {
+                exercisesCache.update { cache ->
+                    val exercise = cache[exerciseId] ?: return@update cache
+                    val updatedSessions = exercise.sessions.map { session ->
+                        if (session.id == sessionId) {
+                            session.copy(sets = (session.sets + capturedSet).sortedBy { it.id })
+                        } else {
+                            session
+                        }
+                    }
+                    cache + (exerciseId to exercise.copy(sessions = updatedSessions))
+                }
+            }
+            Result.failure(Exception("Error al eliminar la serie: ${error.message}"))
         } finally {
-            _isLoading.value = false
+            releaseOp(opKey)
         }
     }
 
@@ -309,11 +485,13 @@ private data class ExerciseInsert(
 
 @Serializable
 private data class SessionInsert(
+    val id: String,
     @SerialName("exercise_id") val exerciseId: String,
 )
 
 @Serializable
 private data class SetInsert(
+    val id: String,
     @SerialName("session_id") val sessionId: String,
     val weight: Double,
     val reps: Int,

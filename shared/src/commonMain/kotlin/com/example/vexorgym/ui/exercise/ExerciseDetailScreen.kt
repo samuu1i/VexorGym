@@ -47,6 +47,9 @@ import com.example.vexorgym.data.model.WorkoutSet
 import com.example.vexorgym.di.AppContainer
 import kotlin.time.Instant
 
+import androidx.compose.runtime.LaunchedEffect
+import kotlin.time.Clock
+
 @Composable
 fun ExerciseDetailRoute(
     exerciseId: String,
@@ -56,6 +59,15 @@ fun ExerciseDetailRoute(
     },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
+    // Log para medir recomposición UI
+    val currentSessionCount = uiState.sessions.size
+    val currentSetCount = uiState.sessions.sumOf { it.sets.size }
+    
+    LaunchedEffect(currentSessionCount, currentSetCount) {
+        println("[PERFORMANCE] UI Recompuesta - Sesiones: $currentSessionCount | Series totales: $currentSetCount | Tiempo: ${Clock.System.now().toEpochMilliseconds()}")
+    }
+
     ExerciseDetailScreen(
         uiState = uiState,
         onBack = onBack,

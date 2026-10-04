@@ -47,6 +47,7 @@ class ExerciseDetailViewModel(
 
     fun addSession() {
         viewModelScope.launch {
+            println("[PERFORMANCE] addSession TRIGGERED - Tiempo: ${kotlin.time.Clock.System.now().toEpochMilliseconds()}")
             repository.addSession(exerciseId)
                 .onFailure { error ->
                     _uiState.update {
@@ -61,6 +62,7 @@ class ExerciseDetailViewModel(
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
+            println("[PERFORMANCE] deleteSession TRIGGERED - Tiempo: ${kotlin.time.Clock.System.now().toEpochMilliseconds()}")
             repository.deleteSession(exerciseId, sessionId)
                 .onSuccess {
                     _uiState.update { current ->
@@ -91,6 +93,7 @@ class ExerciseDetailViewModel(
             return
         }
         viewModelScope.launch {
+            println("[PERFORMANCE] addSet TRIGGERED - Tiempo: ${kotlin.time.Clock.System.now().toEpochMilliseconds()}")
             repository.addSet(exerciseId, sessionId, weight, reps)
                 .onSuccess {
                     updateDraft(sessionId) { SessionSetDraft() }
@@ -106,6 +109,7 @@ class ExerciseDetailViewModel(
 
     fun deleteSet(sessionId: String, setId: String) {
         viewModelScope.launch {
+            println("[PERFORMANCE] deleteSet TRIGGERED - Tiempo: ${kotlin.time.Clock.System.now().toEpochMilliseconds()}")
             repository.deleteSet(exerciseId, sessionId, setId)
                 .onSuccess {
                     _uiState.update { it.copy(actionError = null) }
