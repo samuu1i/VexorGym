@@ -71,9 +71,12 @@ class RemoteGymRepository(
 
     override suspend fun register(email: String, password: String): Result<Boolean> {
         return try {
-            client.auth.signUpWith(Email) {
+            val user = client.auth.signUpWith(Email) {
                 this.email = email
                 this.password = password
+            }
+            if (user != null && user.identities.isNullOrEmpty()) {
+                return Result.failure(Exception("El correo ya está registrado. Iniciá sesión."))
             }
             val hasSession = client.auth.currentSessionOrNull() != null
             if (hasSession) {
