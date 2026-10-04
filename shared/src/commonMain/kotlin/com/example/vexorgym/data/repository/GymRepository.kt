@@ -28,8 +28,22 @@ interface GymRepository {
 
     suspend fun removeExerciseFromDay(day: WeekDay, exerciseId: String): Result<Unit>
 
+    /** Crea una sesión vacía con la fecha/hora actual. */
     suspend fun addSession(exerciseId: String): Result<Unit>
 
-    /** Agrega la serie a la sesión más reciente; si no hay ninguna, crea la primera. */
-    suspend fun addSet(exerciseId: String, weightKg: Double, repetitions: Int): Result<Unit>
+    suspend fun deleteSession(exerciseId: String, sessionId: String): Result<Unit>
+
+    /** Agrega la serie a la sesión indicada. */
+    suspend fun addSet(
+        exerciseId: String,
+        sessionId: String,
+        weightKg: Double,
+        repetitions: Int,
+    ): Result<Unit>
+
+    suspend fun deleteSet(
+        exerciseId: String,
+        sessionId: String,
+        setId: String,
+    ): Result<Unit>
 }

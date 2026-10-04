@@ -5,6 +5,7 @@ import com.example.vexorgym.data.model.Routine
 import com.example.vexorgym.data.model.WeekDay
 import com.example.vexorgym.data.model.WorkoutSession
 import com.example.vexorgym.data.model.WorkoutSet
+import kotlin.time.Clock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -147,36 +148,88 @@ class MockGymRepository : GymRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun deleteSession(exerciseId: String, sessionId: String): Result<Unit> {
+        return mutex.withLock {
+            val exercise = exercisesFlow.value[exerciseId]
+                ?: return@withLock Result.failure(IllegalArgumentException("El ejercicio no existe."))
+            if (exercise.sessions.none { it.id == sessionId }) {
+                return@withLock Result.failure(IllegalArgumentException("La sesión no existe."))
+            }
+            updateExercise(exerciseId) { current ->
+                current.copy(sessions = current.sessions.filterNot { it.id == sessionId })
+            }
+            Result.success(Unit)
+        }
+    }
+
     override suspend fun addSet(
         exerciseId: String,
+        sessionId: String,
         weightKg: Double,
         repetitions: Int,
     ): Result<Unit> {
-        if (exercisesFlow.value[exerciseId] == null) {
-            return Result.failure(IllegalArgumentException("El ejercicio no existe."))
-        }
         if (weightKg < 0 || repetitions <= 0) {
             return Result.failure(IllegalArgumentException("Peso y repeticiones deben ser válidos."))
         }
-        mutex.withLock {
+        return mutex.withLock {
+            val exercise = exercisesFlow.value[exerciseId]
+                ?: return@withLock Result.failure(IllegalArgumentException("El ejercicio no existe."))
+            if (exercise.sessions.none { it.id == sessionId }) {
+                return@withLock Result.failure(IllegalArgumentException("La sesión no existe."))
+            }
             val newSet = WorkoutSet(
                 id = "set_${++setSequence}",
                 repetitions = repetitions,
                 weightKg = weightKg,
             )
-            exercisesFlow.update { current ->
-                val exercise = current[exerciseId] ?: return@update current
-                val sessions = exercise.sessions
-                val updatedSessions = if (sessions.isEmpty()) {
-                    listOf(newSession(newSet))
-                } else {
-                    val last = sessions.last()
-                    sessions.dropLast(1) + last.copy(sets = last.sets + newSet)
-                }
-                current + (exerciseId to exercise.copy(sessions = updatedSessions))
+            updateExercise(exerciseId) { current ->
+                current.copy(
+                    sessions = current.sessions.map { session ->
+                        if (session.id == sessionId) {
+                            session.copy(sets = session.sets + newSet)
+                        } else {
+                            session
+                        }
+                    },
+                )
             }
+            Result.success(Unit)
         }
-        return Result.success(Unit)
+    }
+
+    override suspend fun deleteSet(
+        exerciseId: String,
+        sessionId: String,
+        setId: String,
+    ): Result<Unit> {
+        return mutex.withLock {
+            val exercise = exercisesFlow.value[exerciseId]
+                ?: return@withLock Result.failure(IllegalArgumentException("El ejercicio no existe."))
+            val session = exercise.sessions.firstOrNull { it.id == sessionId }
+                ?: return@withLock Result.failure(IllegalArgumentException("La sesión no existe."))
+            if (session.sets.none { it.id == setId }) {
+                return@withLock Result.failure(IllegalArgumentException("La serie no existe."))
+            }
+            updateExercise(exerciseId) { current ->
+                current.copy(
+                    sessions = current.sessions.map { item ->
+                        if (item.id == sessionId) {
+                            item.copy(sets = item.sets.filterNot { it.id == setId })
+                        } else {
+                            item
+                        }
+                    },
+                )
+            }
+            Result.success(Unit)
+        }
+    }
+
+    private fun updateExercise(exerciseId: String, transform: (Exercise) -> Exercise) {
+        exercisesFlow.update { current ->
+            val exercise = current[exerciseId] ?: return@update current
+            current + (exerciseId to transform(exercise))
+        }
     }
 
     private fun exercise(
@@ -209,7 +262,7 @@ class MockGymRepository : GymRepository {
     private fun newSession(vararg sets: WorkoutSet): WorkoutSession =
         WorkoutSession(
             id = "session_${++sessionSequence}",
-            createdAtMillis = BASE_MILLIS + sessionSequence * DAY_MILLIS,
+            createdAtMillis = Clock.System.now().toEpochMilliseconds(),
             sets = sets.toList(),
         )
 

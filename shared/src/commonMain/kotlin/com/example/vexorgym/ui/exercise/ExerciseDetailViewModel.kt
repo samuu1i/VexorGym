@@ -37,12 +37,12 @@ class ExerciseDetailViewModel(
         }
     }
 
-    fun onWeightChange(value: String) {
-        _uiState.update { it.copy(weightInput = value, formError = null) }
+    fun onWeightChange(sessionId: String, value: String) {
+        updateDraft(sessionId) { it.copy(weightInput = value, error = null) }
     }
 
-    fun onRepsChange(value: String) {
-        _uiState.update { it.copy(repsInput = value, formError = null) }
+    fun onRepsChange(sessionId: String, value: String) {
+        updateDraft(sessionId) { it.copy(repsInput = value, error = null) }
     }
 
     fun addSession() {
@@ -50,34 +50,81 @@ class ExerciseDetailViewModel(
             repository.addSession(exerciseId)
                 .onFailure { error ->
                     _uiState.update {
-                        it.copy(formError = error.message ?: "No se pudo crear la sesión.")
+                        it.copy(actionError = error.message ?: "No se pudo crear la sesión.")
+                    }
+                }
+                .onSuccess {
+                    _uiState.update { it.copy(actionError = null) }
+                }
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            repository.deleteSession(exerciseId, sessionId)
+                .onSuccess {
+                    _uiState.update { current ->
+                        current.copy(
+                            draftsBySessionId = current.draftsBySessionId - sessionId,
+                            actionError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(actionError = error.message ?: "No se pudo eliminar la sesión.")
                     }
                 }
         }
     }
 
-    fun addSet() {
-        val current = _uiState.value
-        val weight = current.weightInput.replace(",", ".").toDoubleOrNull()
-        val reps = current.repsInput.toIntOrNull()
+    fun addSet(sessionId: String) {
+        val draft = _uiState.value.draftFor(sessionId)
+        val weight = draft.weightInput.replace(",", ".").toDoubleOrNull()
+        val reps = draft.repsInput.toIntOrNull()
         if (weight == null || weight < 0) {
-            _uiState.update { it.copy(formError = "Ingresá un peso válido.") }
+            updateDraft(sessionId) { it.copy(error = "Ingresá un peso válido.") }
             return
         }
         if (reps == null || reps <= 0) {
-            _uiState.update { it.copy(formError = "Ingresá repeticiones válidas.") }
+            updateDraft(sessionId) { it.copy(error = "Ingresá repeticiones válidas.") }
             return
         }
         viewModelScope.launch {
-            repository.addSet(exerciseId, weight, reps)
+            repository.addSet(exerciseId, sessionId, weight, reps)
                 .onSuccess {
-                    _uiState.update { it.copy(weightInput = "", repsInput = "", formError = null) }
+                    updateDraft(sessionId) { SessionSetDraft() }
+                    _uiState.update { it.copy(actionError = null) }
+                }
+                .onFailure { error ->
+                    updateDraft(sessionId) {
+                        it.copy(error = error.message ?: "No se pudo agregar la serie.")
+                    }
+                }
+        }
+    }
+
+    fun deleteSet(sessionId: String, setId: String) {
+        viewModelScope.launch {
+            repository.deleteSet(exerciseId, sessionId, setId)
+                .onSuccess {
+                    _uiState.update { it.copy(actionError = null) }
                 }
                 .onFailure { error ->
                     _uiState.update {
-                        it.copy(formError = error.message ?: "No se pudo agregar la serie.")
+                        it.copy(actionError = error.message ?: "No se pudo eliminar la serie.")
                     }
                 }
+        }
+    }
+
+    private fun updateDraft(sessionId: String, transform: (SessionSetDraft) -> SessionSetDraft) {
+        _uiState.update { current ->
+            val draft = transform(current.draftFor(sessionId))
+            current.copy(
+                draftsBySessionId = current.draftsBySessionId + (sessionId to draft),
+                actionError = null,
+            )
         }
     }
 }
