@@ -150,6 +150,15 @@ class MockGymRepository : GymRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun updateRoutineOrder(day: WeekDay, orderedIds: List<String>): Result<Unit> {
+        mutex.withLock {
+            routineMeta.update { current ->
+                current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to orderedIds))
+            }
+        }
+        return Result.success(Unit)
+    }
+
     override suspend fun addSession(exerciseId: String): Result<Unit> {
         if (exercisesFlow.value[exerciseId] == null) {
             return Result.failure(IllegalArgumentException("El ejercicio no existe."))

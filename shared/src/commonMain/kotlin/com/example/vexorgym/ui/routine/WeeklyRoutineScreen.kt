@@ -81,6 +81,7 @@ fun WeeklyRoutineRoute(
         onAddExistingExercise = viewModel::addExistingExercise,
         onAddFromCatalog = viewModel::addExerciseFromCatalog,
         onCreateExercise = viewModel::createExercise,
+        onUpdateOrder = viewModel::updateExerciseOrder,
         onLogoutClick = { viewModel.logout(onLogoutSuccess) }
     )
 }
@@ -95,6 +96,7 @@ fun WeeklyRoutineScreen(
     onAddExistingExercise: (String) -> Unit,
     onAddFromCatalog: (String, String) -> Unit,
     onCreateExercise: (String, String) -> Unit,
+    onUpdateOrder: (List<String>) -> Unit,
     onLogoutClick: () -> Unit,
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -224,6 +226,7 @@ fun WeeklyRoutineScreen(
                                 onDragEnd = {
                                     draggingIndex = null
                                     dragOffset = 0f
+                                    onUpdateOrder(localExercises.map { it.id })
                                 },
                                 onDrag = { dragAmount ->
                                     dragOffset += dragAmount
@@ -330,7 +333,7 @@ private fun ExerciseCard(
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
 
     val lastSession = exercise.sessions.maxByOrNull { it.createdAtMillis }
-    val lastSessionInfo = lastSession?.sets?.maxByOrNull { it.id }?.let { lastSet ->
+    val lastSessionInfo = lastSession?.sets?.lastOrNull()?.let { lastSet ->
         val weightStr = if (lastSet.weightKg % 1.0 == 0.0) lastSet.weightKg.toInt().toString() else lastSet.weightKg.toString()
         "Última: ${weightStr}kg × ${lastSet.repetitions}"
     }

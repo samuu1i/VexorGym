@@ -63,6 +63,10 @@ class RemoteGymRepository(
         }.concatToString()
     }
 
+    private fun generateSetId(): String {
+        return generateUUID()
+    }
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -166,6 +170,15 @@ class RemoteGymRepository(
         )
     }
 
+    private suspend fun saveRoutine(newMap: Map<WeekDay, List<String>>) {
+        try {
+            val uid = client.auth.currentUserOrNull()?.id ?: return
+            client.from("user_routines").upsert(UserRoutine(userId = uid, routineData = newMap))
+        } catch (e: Exception) {
+            println("Error saving routine: ${e.message}")
+        }
+    }
+
     override suspend fun addExerciseToDay(day: WeekDay, exerciseId: String): Result<Unit> {
         if (exercisesCache.value[exerciseId] == null) {
             return Result.failure(IllegalArgumentException("El ejercicio no existe."))
@@ -174,9 +187,11 @@ class RemoteGymRepository(
         if (exerciseId in ids) {
             return Result.failure(IllegalArgumentException("Ese ejercicio ya está en ${day.displayName}."))
         }
+        val newMap = routineMeta.value.exerciseIdsByDay + (day to ids + exerciseId)
         routineMeta.update { current ->
-            current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to ids + exerciseId))
+            current.copy(exerciseIdsByDay = newMap)
         }
+        saveRoutine(newMap)
         return Result.success(Unit)
     }
 
@@ -196,13 +211,17 @@ class RemoteGymRepository(
                     select()
                 }
                 .decodeSingle<Exercise>()
+                
+            var newMapToSave: Map<WeekDay, List<String>>? = null
             mutex.withLock {
                 exercisesCache.update { cache -> cache + (created.id to created) }
                 val ids = routineMeta.value.exerciseIdsByDay[day].orEmpty()
+                newMapToSave = routineMeta.value.exerciseIdsByDay + (day to ids + created.id)
                 routineMeta.update { current ->
-                    current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to ids + created.id))
+                    current.copy(exerciseIdsByDay = newMapToSave!!)
                 }
             }
+            saveRoutine(newMapToSave!!)
             Result.success(Unit)
         } catch (error: Exception) {
             Result.failure(Exception("Error al crear el ejercicio: ${error.message}"))
@@ -222,8 +241,9 @@ class RemoteGymRepository(
         }
         
         val newIdsForDay = currentIdsForDay.filterNot { it == exerciseId }
+        val newMap = currentMeta.exerciseIdsByDay + (day to newIdsForDay)
         val newMeta = currentMeta.copy(
-            exerciseIdsByDay = currentMeta.exerciseIdsByDay + (day to newIdsForDay)
+            exerciseIdsByDay = newMap
         )
         
         // 2. Actualización optimista
@@ -238,6 +258,7 @@ class RemoteGymRepository(
             mutex.withLock {
                 exercisesCache.update { current -> current - exerciseId }
             }
+            saveRoutine(newMap)
             Result.success(Unit)
         } catch (error: Exception) {
             // 3. Rollback
@@ -245,6 +266,21 @@ class RemoteGymRepository(
             Result.failure(Exception("Error al eliminar el ejercicio: ${error.message}"))
         } finally {
             releaseOp(opKey)
+        }
+    }
+
+    override suspend fun updateRoutineOrder(day: WeekDay, orderedIds: List<String>): Result<Unit> {
+        val currentMeta = routineMeta.value
+        val newMap = currentMeta.exerciseIdsByDay + (day to orderedIds)
+        routineMeta.value = currentMeta.copy(exerciseIdsByDay = newMap)
+        
+        return try {
+            val uid = client.auth.currentUserOrNull()?.id ?: return Result.failure(Exception("No session"))
+            client.from("user_routines").upsert(UserRoutine(userId = uid, routineData = newMap))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            routineMeta.value = currentMeta
+            Result.failure(Exception("Error al guardar el orden: ${e.message}"))
         }
     }
 
@@ -342,12 +378,13 @@ class RemoteGymRepository(
         val opKey = "addSet_$sessionId"
         if (!acquireOp(opKey)) return Result.success(Unit)
 
-        val setId = generateUUID()
+        val setId = generateSetId()
         val optimisticSet = com.example.vexorgym.data.model.WorkoutSet(
             id = setId,
             sessionId = sessionId,
             weightKg = weightKg,
-            repetitions = repetitions
+            repetitions = repetitions,
+            dateCreated = kotlin.time.Clock.System.now().toString()
         )
 
         // 1. Actualización Optimista
@@ -356,7 +393,7 @@ class RemoteGymRepository(
                 val exercise = cache[exerciseId] ?: return@update cache
                 val updatedSessions = exercise.sessions.map { session ->
                     if (session.id == sessionId) {
-                        session.copy(sets = (session.sets + optimisticSet).sortedBy { it.id })
+                        session.copy(sets = (session.sets + optimisticSet).sortedBy { it.createdAtMillis })
                     } else {
                         session
                     }
@@ -438,7 +475,7 @@ class RemoteGymRepository(
                     val exercise = cache[exerciseId] ?: return@update cache
                     val updatedSessions = exercise.sessions.map { session ->
                         if (session.id == sessionId) {
-                            session.copy(sets = (session.sets + capturedSet).sortedBy { it.id })
+                            session.copy(sets = (session.sets + capturedSet).sortedBy { it.createdAtMillis })
                         } else {
                             session
                         }
@@ -465,15 +502,32 @@ class RemoteGymRepository(
                         .map { session ->
                             session.copy(
                                 sets = session.sets.sortedWith(
-                                    compareBy<com.example.vexorgym.data.model.WorkoutSet> { it.id },
+                                    // Para que Compose y la UI muestren el orden correcto, 
+                                    // ordenamos los sets por su ID de inserción original en DB o UUID
+                                    compareBy<com.example.vexorgym.data.model.WorkoutSet> { it.createdAtMillis },
                                 ),
                             )
                         }
                         .sortedBy { it.createdAtMillis }
                     exercise.id to exercise.copy(sessions = sessions)
                 }
+                
+                val routineRows = try {
+                    client.from("user_routines").select().decodeList<UserRoutine>()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                val userMap = routineRows.firstOrNull()?.routineData
+                
                 exercisesCache.value = mapped
-                seedRoutineIfNeeded(mapped.keys.toList())
+                
+                if (userMap != null) {
+                    routineMeta.update { current -> current.copy(exerciseIdsByDay = userMap) }
+                    routineSeeded = true
+                } else {
+                    seedRoutineIfNeeded(mapped.keys.toList())
+                }
+                
                 cacheLoaded = true
                 _error.value = null
             } catch (error: Exception) {
@@ -507,6 +561,12 @@ class RemoteGymRepository(
         val exerciseIdsByDay: Map<WeekDay, List<String>>,
     )
 }
+
+@Serializable
+private data class UserRoutine(
+    @SerialName("user_id") val userId: String,
+    @SerialName("routine_data") val routineData: Map<WeekDay, List<String>>
+)
 
 @Serializable
 private data class ExerciseInsert(

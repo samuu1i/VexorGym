@@ -30,6 +30,8 @@ interface GymRepository {
     ): Result<Unit>
 
     suspend fun removeExerciseFromDay(day: WeekDay, exerciseId: String): Result<Unit>
+    
+    suspend fun updateRoutineOrder(day: WeekDay, orderedIds: List<String>): Result<Unit>
 
     /** Crea una sesión vacía con la fecha/hora actual. */
     suspend fun addSession(exerciseId: String): Result<Unit>

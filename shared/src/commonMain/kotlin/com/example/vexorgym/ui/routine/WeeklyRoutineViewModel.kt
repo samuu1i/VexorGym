@@ -114,6 +114,16 @@ class WeeklyRoutineViewModel(
         }
     }
 
+    fun updateExerciseOrder(newOrderIds: List<String>) {
+        val day = _uiState.value.selectedDay
+        viewModelScope.launch {
+            repository.updateRoutineOrder(day, newOrderIds)
+                .onFailure { error ->
+                    _uiState.update { it.copy(actionError = error.message ?: "No se pudo guardar el orden.") }
+                }
+        }
+    }
+
     fun logout(onSuccess: () -> Unit) {
         viewModelScope.launch {
             repository.logout()
