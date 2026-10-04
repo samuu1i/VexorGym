@@ -16,6 +16,14 @@ class LoginViewModel(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            if (repository.hasValidSession()) {
+                _uiState.update { it.copy(isLoggedIn = true) }
+            }
+        }
+    }
+
     fun onEmailChange(value: String) {
         _uiState.update { it.copy(email = value, errorMessage = null) }
     }
@@ -47,6 +55,35 @@ class LoginViewModel(
                         it.copy(
                             isLoading = false,
                             errorMessage = error.message ?: "No se pudo iniciar sesión.",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun register() {
+        val current = _uiState.value
+        if (current.isLoading) return
+
+        val email = current.email.trim()
+        val password = current.password
+        val validationError = validateCredentials(email, password)
+        if (validationError != null) {
+            _uiState.update { it.copy(errorMessage = validationError) }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            repository.register(email, password)
+                .onSuccess {
+                    _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = error.message ?: "No se pudo crear la cuenta.",
                         )
                     }
                 }

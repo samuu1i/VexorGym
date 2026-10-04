@@ -1,12 +1,12 @@
 package com.example.vexorgym.di
 
 import com.example.vexorgym.data.repository.GymRepository
-import com.example.vexorgym.data.repository.MockGymRepository
+import com.example.vexorgym.data.repository.RemoteGymRepository
 
 /**
- * Composición mínima de dependencias. Para Firebase/Supabase,
- * cambiá únicamente la instancia de [gymRepository].
+ * Composición mínima de dependencias. Los ViewModels siguen usando [gymRepository];
+ * acá se elige la implementación (mock vs red).
  */
 object AppContainer {
-    val gymRepository: GymRepository = MockGymRepository()
+    val gymRepository: GymRepository = RemoteGymRepository()
 }

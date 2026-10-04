@@ -44,6 +44,7 @@ fun LoginRoute(
         onEmailChange = viewModel::onEmailChange,
         onPasswordChange = viewModel::onPasswordChange,
         onLoginClick = viewModel::login,
+        onRegisterClick = viewModel::register,
     )
 }
 
@@ -53,6 +54,7 @@ fun LoginScreen(
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onLoginClick: () -> Unit,
+    onRegisterClick: () -> Unit,
 ) {
     val hasError = uiState.errorMessage != null
 
@@ -117,6 +119,14 @@ fun LoginScreen(
             } else {
                 Text("Iniciar sesión")
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onRegisterClick,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !uiState.isLoading,
+        ) {
+            Text("Registrarse")
         }
     }
 }

@@ -63,6 +63,16 @@ class MockGymRepository : GymRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun register(email: String, password: String): Result<Unit> {
+        delay(400)
+        return Result.success(Unit)
+    }
+
+    override suspend fun hasValidSession(): Boolean {
+        delay(100)
+        return false
+    }
+
     override fun observeRoutine(): Flow<Routine> =
         combine(exercisesFlow, routineMeta) { exercises, meta ->
             Routine(
