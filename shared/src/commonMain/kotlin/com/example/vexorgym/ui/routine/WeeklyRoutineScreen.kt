@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -63,6 +64,7 @@ fun WeeklyRoutineRoute(
         onExerciseClick = onExerciseClick,
         onRemoveExercise = viewModel::removeExercise,
         onAddExistingExercise = viewModel::addExistingExercise,
+        onAddFromCatalog = viewModel::addExerciseFromCatalog,
         onCreateExercise = viewModel::createExercise,
         onLogoutClick = { viewModel.logout(onLogoutSuccess) }
     )
@@ -76,6 +78,7 @@ fun WeeklyRoutineScreen(
     onExerciseClick: (String) -> Unit,
     onRemoveExercise: (String) -> Unit,
     onAddExistingExercise: (String) -> Unit,
+    onAddFromCatalog: (String, String) -> Unit,
     onCreateExercise: (String, String) -> Unit,
     onLogoutClick: () -> Unit,
 ) {
@@ -180,9 +183,12 @@ fun WeeklyRoutineScreen(
 
     if (showAddDialog) {
         AddExerciseDialog(
-            dayName = uiState.selectedDay.displayName,
             availableExercises = uiState.exercisesNotOnSelectedDay,
             onDismiss = { showAddDialog = false },
+            onAddFromCatalog = { name, group ->
+                onAddFromCatalog(name, group)
+                showAddDialog = false
+            },
             onSelectExisting = { exerciseId ->
                 onAddExistingExercise(exerciseId)
                 showAddDialog = false
@@ -232,67 +238,113 @@ private fun ExerciseCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddExerciseDialog(
-    dayName: String,
     availableExercises: List<Exercise>,
     onDismiss: () -> Unit,
+    onAddFromCatalog: (String, String) -> Unit,
     onSelectExisting: (String) -> Unit,
     onCreate: (String, String) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var muscleGroup by remember { mutableStateOf("") }
+    var step by remember { mutableStateOf(0) }
+    var selectedGroup by remember { mutableStateOf("") }
+    var customName by remember { mutableStateOf("") }
+
+    val allGroups = MUSCLE_GROUPS_CATALOG.keys.toList()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Agregar a $dayName") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Nombre") },
-                    singleLine = true,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = muscleGroup,
-                    onValueChange = { muscleGroup = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Grupo muscular") },
-                    singleLine = true,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { onCreate(name, muscleGroup) },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = name.isNotBlank(),
-                ) {
-                    Text("Crear y agregar")
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (step > 0) {
+                    IconButton(onClick = { step-- }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
+                    }
                 }
-                if (availableExercises.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider()
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "O elegí uno del catálogo",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 220.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        items(availableExercises, key = { it.id }) { exercise ->
+                Text(
+                    when (step) {
+                        0 -> "Seleccionar grupo muscular"
+                        1 -> "Seleccionar ejercicio"
+                        else -> "Nuevo ejercicio"
+                    }
+                )
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (step == 0) {
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(allGroups) { group ->
                             Text(
-                                text = "${exercise.name} · ${exercise.muscleGroup}",
+                                text = group,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onSelectExisting(exercise.id) }
-                                    .padding(vertical = 10.dp),
-                                style = MaterialTheme.typography.bodyLarge,
+                                    .clickable {
+                                        selectedGroup = group
+                                        step = 1
+                                    }
+                                    .padding(vertical = 12.dp),
+                                style = MaterialTheme.typography.bodyLarge
                             )
                         }
+                    }
+                } else if (step == 1) {
+                    val basicExercises = MUSCLE_GROUPS_CATALOG[selectedGroup].orEmpty()
+                    val userExistingForGroup = availableExercises.filter { it.muscleGroup == selectedGroup }
+
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(basicExercises) { exName ->
+                            Text(
+                                text = exName,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onAddFromCatalog(exName, selectedGroup) }
+                                    .padding(vertical = 12.dp),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        if (userExistingForGroup.isNotEmpty()) {
+                            item {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                Text("Mis ejercicios de $selectedGroup", style = MaterialTheme.typography.labelMedium)
+                            }
+                            items(userExistingForGroup, key = { it.id }) { ex ->
+                                // Evitar duplicados si tienen el mismo nombre que el catálogo
+                                if (basicExercises.none { it.equals(ex.name, ignoreCase = true) }) {
+                                    Text(
+                                        text = ex.name,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { onSelectExisting(ex.id) }
+                                            .padding(vertical = 12.dp),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(onClick = { step = 2 }) {
+                                Text("+ Agregar ejercicio personalizado")
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = customName,
+                        onValueChange = { customName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Nombre del ejercicio ($selectedGroup)") },
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { onCreate(customName, selectedGroup) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = customName.isNotBlank(),
+                    ) {
+                        Text("Crear y agregar")
                     }
                 }
             }

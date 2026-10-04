@@ -33,7 +33,6 @@ class RemoteGymRepository(
     private var routineSeeded = false
 
     private val exercisesCache = MutableStateFlow<Map<String, Exercise>>(emptyMap())
-    private val muscleGroups = MutableStateFlow<Map<String, String>>(emptyMap())
     private val routineMeta = MutableStateFlow(
         RoutineMeta(
             id = "routine_remote",
@@ -93,7 +92,6 @@ class RemoteGymRepository(
             client.auth.signOut()
             mutex.withLock {
                 exercisesCache.value = emptyMap()
-                muscleGroups.value = emptyMap()
                 routineMeta.value = routineMeta.value.copy(
                     exerciseIdsByDay = WeekDay.entries.associateWith { emptyList() }
                 )
@@ -114,13 +112,13 @@ class RemoteGymRepository(
     override fun observeRoutine(): Flow<Routine> = flow {
         refreshAll()
         emitAll(
-            combine(exercisesCache, routineMeta, muscleGroups) { exercises, meta, groups ->
+            combine(exercisesCache, routineMeta) { exercises, meta ->
                 Routine(
                     id = meta.id,
                     name = meta.name,
                     exercisesByDay = WeekDay.entries.associateWith { day ->
                         meta.exerciseIdsByDay[day].orEmpty().mapNotNull { id ->
-                            exercises[id]?.copy(muscleGroup = groups[id].orEmpty())
+                            exercises[id]
                         }
                     },
                 )
@@ -131,20 +129,18 @@ class RemoteGymRepository(
     override fun observeCatalog(): Flow<List<Exercise>> = flow {
         refreshAll()
         emitAll(
-            combine(exercisesCache, muscleGroups) { exercises, groups ->
-                exercises.values
-                    .map { it.copy(muscleGroup = groups[it.id].orEmpty()) }
-                    .sortedBy { it.name }
-            },
+            exercisesCache.map { exercises ->
+                exercises.values.sortedBy { it.name }
+            }
         )
     }
 
     override fun observeExercise(exerciseId: String): Flow<Exercise?> = flow {
         refreshAll()
         emitAll(
-            combine(exercisesCache, muscleGroups) { exercises, groups ->
-                exercises[exerciseId]?.copy(muscleGroup = groups[exerciseId].orEmpty())
-            },
+            exercisesCache.map { exercises ->
+                exercises[exerciseId]
+            }
         )
     }
 
@@ -171,14 +167,13 @@ class RemoteGymRepository(
         if (trimmedName.isEmpty()) {
             return Result.failure(IllegalArgumentException("El nombre del ejercicio no puede estar vacío."))
         }
+        val finalGroup = muscleGroup.trim().ifEmpty { "General" }
         return mutate {
             val created = client.from("exercises")
-                .insert(ExerciseInsert(name = trimmedName)) {
+                .insert(ExerciseInsert(name = trimmedName, muscleGroup = finalGroup)) {
                     select()
                 }
                 .decodeSingle<Exercise>()
-            val group = muscleGroup.trim().ifEmpty { "General" }
-            muscleGroups.update { it + (created.id to group) }
             val ids = routineMeta.value.exerciseIdsByDay[day].orEmpty()
             routineMeta.update { current ->
                 current.copy(exerciseIdsByDay = current.exerciseIdsByDay + (day to ids + created.id))
@@ -307,7 +302,10 @@ class RemoteGymRepository(
 }
 
 @Serializable
-private data class ExerciseInsert(val name: String)
+private data class ExerciseInsert(
+    val name: String,
+    @SerialName("muscle_group") val muscleGroup: String
+)
 
 @Serializable
 private data class SessionInsert(

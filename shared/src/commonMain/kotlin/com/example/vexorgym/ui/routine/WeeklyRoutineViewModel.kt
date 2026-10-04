@@ -11,6 +11,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+val MUSCLE_GROUPS_CATALOG = mapOf(
+    "Pecho" to listOf("Press banca", "Press inclinado", "Aperturas", "Fondos"),
+    "Espalda" to listOf("Dominadas", "Jalón al pecho", "Remo con barra", "Remo con mancuerna"),
+    "Hombros" to listOf("Press militar", "Elevaciones laterales", "Pájaros"),
+    "Bíceps" to listOf("Curl con barra", "Curl con mancuernas", "Curl martillo"),
+    "Tríceps" to listOf("Extensiones en polea", "Press francés", "Fondos en paralelas"),
+    "Cuádriceps" to listOf("Sentadilla", "Prensa", "Extensiones de cuádriceps"),
+    "Femorales" to listOf("Peso muerto rumano", "Curl femoral"),
+    "Glúteos" to listOf("Hip thrust", "Patada de glúteo"),
+    "Pantorrillas" to listOf("Elevación de talones de pie", "Elevación de talones sentado"),
+    "Abdominales" to listOf("Crunch", "Plancha", "Elevación de piernas")
+)
+
 class WeeklyRoutineViewModel(
     private val repository: GymRepository,
 ) : ViewModel() {
@@ -53,6 +66,20 @@ class WeeklyRoutineViewModel(
                 .onSuccess {
                     _uiState.update { it.copy(actionError = null) }
                 }
+        }
+    }
+    
+    fun addExerciseFromCatalog(name: String, muscleGroup: String) {
+        val day = _uiState.value.selectedDay
+        // Buscamos si el usuario ya lo tiene en su base de datos personal
+        val existing = _uiState.value.catalog.find { 
+            it.name.equals(name, ignoreCase = true) && it.muscleGroup.equals(muscleGroup, ignoreCase = true) 
+        }
+        
+        if (existing != null) {
+            addExistingExercise(existing.id)
+        } else {
+            createExercise(name, muscleGroup)
         }
     }
 
