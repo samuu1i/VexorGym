@@ -1,5 +1,3 @@
-<img width="354" height="791" alt="image" src="https://github.com/user-attachments/assets/00e380c5-e789-44a9-8182-7fd66c598601" /># VexorGym
-
 VexorGym es una aplicación móvil multiplataforma para registrar y consultar entrenamientos de gimnasio de forma simple y rápida.
 
 Está pensada principalmente para personas que ya tienen experiencia entrenando y prefieren crear sus propias rutinas en lugar de utilizar rutinas guiadas. El objetivo es facilitar el seguimiento del rendimiento anterior de cada ejercicio para aplicar sobrecarga progresiva de forma sencilla.
@@ -288,13 +286,19 @@ VexorGym/
 Se recomienda incluir capturas de las principales pantallas:
 
 * Login
+  
   <img width="350" height="792" alt="image" src="https://github.com/user-attachments/assets/dc87763a-0db7-4719-9be7-efb93340389b" />
+  
 * Rutina semanal
+  
   <img width="353" height="791" alt="image" src="https://github.com/user-attachments/assets/57d8c7ff-61bb-44b4-b9ae-9f016dbb4a63" />
+  
 * Detalle del ejercicio
+  
   <img width="351" height="788" alt="image" src="https://github.com/user-attachments/assets/e91924a6-23c5-4789-bb66-6e8157eeadf2" />
 
 * Eliminar ejercicio
+  
   <img width="353" height="790" alt="image" src="https://github.com/user-attachments/assets/32af75b3-5879-4ec9-a278-dda2c4e880ba" />
 
 ## 📦 APK
