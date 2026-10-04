@@ -25,11 +25,11 @@ class LoginViewModel(
     }
 
     fun onEmailChange(value: String) {
-        _uiState.update { it.copy(email = value, errorMessage = null) }
+        _uiState.update { it.copy(email = value, errorMessage = null, successMessage = null) }
     }
 
     fun onPasswordChange(value: String) {
-        _uiState.update { it.copy(password = value, errorMessage = null) }
+        _uiState.update { it.copy(password = value, errorMessage = null, successMessage = null) }
     }
 
     fun login() {
@@ -45,7 +45,7 @@ class LoginViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
             repository.login(email, password)
                 .onSuccess {
                     _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
@@ -74,10 +74,19 @@ class LoginViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
             repository.register(email, password)
-                .onSuccess {
-                    _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
+                .onSuccess { isLogged ->
+                    if (isLogged) {
+                        _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
+                    } else {
+                        _uiState.update { 
+                            it.copy(
+                                isLoading = false, 
+                                successMessage = "Revisá tu correo para confirmar tu cuenta." 
+                            ) 
+                        }
+                    }
                 }
                 .onFailure { error ->
                     _uiState.update {

@@ -86,4 +86,11 @@ class WeeklyRoutineViewModel(
                 }
         }
     }
+
+    fun logout(onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            repository.logout()
+            onSuccess()
+        }
+    }
 }

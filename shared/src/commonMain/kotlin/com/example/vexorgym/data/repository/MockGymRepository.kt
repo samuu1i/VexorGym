@@ -63,8 +63,13 @@ class MockGymRepository : GymRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun register(email: String, password: String): Result<Unit> {
+    override suspend fun register(email: String, password: String): Result<Boolean> {
         delay(400)
+        return Result.success(true)
+    }
+
+    override suspend fun logout(): Result<Unit> {
+        delay(200)
         return Result.success(Unit)
     }
 

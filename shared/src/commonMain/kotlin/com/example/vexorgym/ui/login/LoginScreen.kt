@@ -104,6 +104,14 @@ fun LoginScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
+        uiState.successMessage?.let { message ->
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = onLoginClick,

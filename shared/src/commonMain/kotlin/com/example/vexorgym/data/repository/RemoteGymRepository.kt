@@ -49,23 +49,57 @@ class RemoteGymRepository(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     override suspend fun login(email: String, password: String): Result<Unit> {
-        return runCatching {
+        return try {
             client.auth.signInWith(Email) {
                 this.email = email
                 this.password = password
             }
             refreshAll(force = true)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val msg = e.message ?: ""
+            val userError = if ("Email not confirmed" in msg || "not confirmed" in msg) {
+                "Debes confirmar tu correo antes de iniciar sesión."
+            } else if ("Invalid login credentials" in msg || "invalid" in msg.lowercase()) {
+                "Credenciales incorrectas."
+            } else {
+                "Error al iniciar sesión."
+            }
+            Result.failure(Exception(userError))
         }
     }
 
-    override suspend fun register(email: String, password: String): Result<Unit> {
-        return runCatching {
+    override suspend fun register(email: String, password: String): Result<Boolean> {
+        return try {
             client.auth.signUpWith(Email) {
                 this.email = email
                 this.password = password
             }
-            // Actualizamos por si auto-confirm está activado
-            refreshAll(force = true)
+            val hasSession = client.auth.currentSessionOrNull() != null
+            if (hasSession) {
+                refreshAll(force = true)
+            }
+            Result.success(hasSession)
+        } catch (e: Exception) {
+            Result.failure(Exception("Error al registrarse: ${e.message}"))
+        }
+    }
+
+    override suspend fun logout(): Result<Unit> {
+        return try {
+            client.auth.signOut()
+            mutex.withLock {
+                exercisesCache.value = emptyMap()
+                muscleGroups.value = emptyMap()
+                routineMeta.value = routineMeta.value.copy(
+                    exerciseIdsByDay = WeekDay.entries.associateWith { emptyList() }
+                )
+                cacheLoaded = false
+                routineSeeded = false
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

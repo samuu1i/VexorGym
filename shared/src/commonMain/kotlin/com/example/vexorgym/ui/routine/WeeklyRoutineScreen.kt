@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -50,6 +51,7 @@ import com.example.vexorgym.di.AppContainer
 @Composable
 fun WeeklyRoutineRoute(
     onExerciseClick: (String) -> Unit,
+    onLogoutSuccess: () -> Unit,
     viewModel: WeeklyRoutineViewModel = viewModel {
         WeeklyRoutineViewModel(AppContainer.gymRepository)
     },
@@ -62,6 +64,7 @@ fun WeeklyRoutineRoute(
         onRemoveExercise = viewModel::removeExercise,
         onAddExistingExercise = viewModel::addExistingExercise,
         onCreateExercise = viewModel::createExercise,
+        onLogoutClick = { viewModel.logout(onLogoutSuccess) }
     )
 }
 
@@ -74,12 +77,20 @@ fun WeeklyRoutineScreen(
     onRemoveExercise: (String) -> Unit,
     onAddExistingExercise: (String) -> Unit,
     onCreateExercise: (String, String) -> Unit,
+    onLogoutClick: () -> Unit,
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(uiState.routineName.ifBlank { "Rutina semanal" }) })
+            TopAppBar(
+                title = { Text(uiState.routineName.ifBlank { "Rutina semanal" }) },
+                actions = {
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Cerrar sesión")
+                    }
+                }
+            )
         },
     ) { innerPadding ->
         if (uiState.isLoading) {

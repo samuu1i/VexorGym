@@ -37,6 +37,11 @@ fun AppNavHost(
                 onExerciseClick = { exerciseId ->
                     navController.navigate(AppRoutes.exerciseDetail(exerciseId))
                 },
+                onLogoutSuccess = {
+                    navController.navigate(AppRoutes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
         composable(

@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.Flow
  */
 interface GymRepository {
     suspend fun login(email: String, password: String): Result<Unit>
-    suspend fun register(email: String, password: String): Result<Unit>
+    suspend fun register(email: String, password: String): Result<Boolean>
+    suspend fun logout(): Result<Unit>
     suspend fun hasValidSession(): Boolean
 
     fun observeRoutine(): Flow<Routine>
