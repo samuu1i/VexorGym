@@ -38,10 +38,12 @@ class ExerciseDetailViewModel(
     }
 
     fun onWeightChange(sessionId: String, value: String) {
+        if (value.count { it.isDigit() } > 4 || value.length > 5) return
         updateDraft(sessionId) { it.copy(weightInput = value, error = null) }
     }
 
     fun onRepsChange(sessionId: String, value: String) {
+        if (value.length > 4) return
         updateDraft(sessionId) { it.copy(repsInput = value, error = null) }
     }
 

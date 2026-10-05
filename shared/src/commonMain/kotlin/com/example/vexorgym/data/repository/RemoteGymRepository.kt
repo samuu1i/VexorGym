@@ -78,7 +78,13 @@ class RemoteGymRepository(
     private fun handleNetworkError(e: Exception, fallbackMessage: String): Exception {
         return when (e) {
             is HttpRequestException, is kotlinx.io.IOException -> Exception("No hay conexión a Internet. Verificá tu conexión e intentá nuevamente.")
-            is RestException -> Exception("$fallbackMessage: ${e.error}")
+            is RestException -> {
+                if (e.error.contains("user_already_exist", ignoreCase = true)) {
+                    Exception("Este email ya está registrado. Intentá iniciar sesión.")
+                } else {
+                    Exception("$fallbackMessage: ${e.error}")
+                }
+            }
             else -> Exception("$fallbackMessage: ${e.message}")
         }
     }
