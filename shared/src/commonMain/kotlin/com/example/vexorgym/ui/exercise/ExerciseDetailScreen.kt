@@ -390,50 +390,82 @@ private fun SessionCard(
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(modifier = Modifier.padding(end = 12.dp))
             Spacer(Modifier.height(12.dp))
-            Text(
-                "Agregar serie",
-                modifier = Modifier.padding(end = 12.dp),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.padding(end = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedTextField(
-                    value = draft.weightInput,
-                    onValueChange = onWeightChange,
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Peso") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
-                OutlinedTextField(
-                    value = draft.repsInput,
-                    onValueChange = onRepsChange,
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Repeticiones") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-            }
-            draft.error?.let { error ->
-                Spacer(Modifier.height(8.dp))
+            
+            var isAddingSet by remember { mutableStateOf(false) }
+            
+            if (!isAddingSet) {
+                TextButton(
+                    onClick = { isAddingSet = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 12.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.padding(horizontal = 4.dp))
+                    Text("Agregar serie")
+                }
+            } else {
                 Text(
-                    error,
+                    "Nueva serie",
                     modifier = Modifier.padding(end = 12.dp),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.titleSmall,
                 )
-            }
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = onAddSet,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 12.dp),
-            ) {
-                Text("Agregar serie")
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.padding(end = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = draft.weightInput,
+                        onValueChange = onWeightChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Peso") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    OutlinedTextField(
+                        value = draft.repsInput,
+                        onValueChange = onRepsChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Repeticiones") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+                draft.error?.let { error ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        error,
+                        modifier = Modifier.padding(end = 12.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { 
+                            onWeightChange("")
+                            onRepsChange("")
+                            isAddingSet = false 
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Button(
+                        onClick = { 
+                            onAddSet()
+                            isAddingSet = false 
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Guardar")
+                    }
+                }
             }
         }
     }
