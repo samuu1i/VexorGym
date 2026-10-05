@@ -47,7 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.vexorgym.data.model.WorkoutSession
 import com.example.vexorgym.data.model.WorkoutSet
@@ -68,7 +68,7 @@ fun ExerciseDetailRoute(
         ExerciseDetailViewModel(exerciseId, AppContainer.gymRepository)
     },
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsState()
     
     // Log para medir recomposición UI
     val currentSessionCount = uiState.sessions.size

@@ -58,11 +58,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.vexorgym.data.model.Exercise
 import com.example.vexorgym.data.model.WeekDay
 import com.example.vexorgym.di.AppContainer
+
+import androidx.compose.runtime.LaunchedEffect
+import kotlin.time.Clock
 
 @Composable
 fun WeeklyRoutineRoute(
@@ -72,7 +75,7 @@ fun WeeklyRoutineRoute(
         WeeklyRoutineViewModel(AppContainer.gymRepository)
     },
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsState()
     WeeklyRoutineScreen(
         uiState = uiState,
         onDaySelected = viewModel::selectDay,
@@ -332,7 +335,7 @@ private fun ExerciseCard(
     val currentOnDrag by rememberUpdatedState(onDrag)
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
 
-    val lastSession = exercise.sessions.maxByOrNull { it.createdAtMillis }
+    val lastSession = exercise.sessions.lastOrNull()
     val lastSessionInfo = lastSession?.sets?.lastOrNull()?.let { lastSet ->
         val weightStr = if (lastSet.weightKg % 1.0 == 0.0) lastSet.weightKg.toInt().toString() else lastSet.weightKg.toString()
         "Última: ${weightStr}kg × ${lastSet.repetitions}"
