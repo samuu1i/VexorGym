@@ -79,13 +79,27 @@ class RemoteGymRepository(
         return when (e) {
             is HttpRequestException, is kotlinx.io.IOException -> Exception("No hay conexión a Internet. Verificá tu conexión e intentá nuevamente.")
             is RestException -> {
-                if (e.error.contains("user_already_exist", ignoreCase = true)) {
+                val errorStr = e.error.lowercase()
+                if (errorStr.contains("user_already_exist")) {
                     Exception("Este email ya está registrado. Intentá iniciar sesión.")
+                } else if (errorStr.contains("same_password") || errorStr.contains("different from the old password")) {
+                    Exception("La nueva contraseña debe ser diferente a tu contraseña actual.")
+                } else if (errorStr.contains("otp_expired") || errorStr.contains("invalid_token") || errorStr.contains("token_expired") || errorStr.contains("invalid token") || errorStr.contains("expired token") || errorStr.contains("invalid_grant")) {
+                    Exception("El enlace de recuperación no es válido o ya expiró. Solicitá un nuevo enlace.")
                 } else {
                     Exception("$fallbackMessage: ${e.error}")
                 }
             }
-            else -> Exception("$fallbackMessage: ${e.message}")
+            else -> {
+                val msg = e.message?.lowercase() ?: ""
+                if (msg.contains("same_password") || msg.contains("different from the old password")) {
+                    Exception("La nueva contraseña debe ser diferente a tu contraseña actual.")
+                } else if (msg.contains("otp_expired") || msg.contains("invalid_token") || msg.contains("token_expired") || msg.contains("invalid token") || msg.contains("expired token") || msg.contains("invalid_grant")) {
+                    Exception("El enlace de recuperación no es válido o ya expiró. Solicitá un nuevo enlace.")
+                } else {
+                    Exception("$fallbackMessage: ${e.message}")
+                }
+            }
         }
     }
     override suspend fun login(email: String, password: String): Result<Unit> {
@@ -128,6 +142,28 @@ class RemoteGymRepository(
             Result.success(hasSession)
         } catch (e: Exception) {
             Result.failure(handleNetworkError(e, "Error al registrarse"))
+        }
+    }
+
+    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            client.auth.resetPasswordForEmail(email, redirectUrl = "vexorgym://reset-password")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(handleNetworkError(e, "Error al enviar email"))
+        }
+    }
+
+    override suspend fun updatePassword(newPassword: String): Result<Unit> {
+        return try {
+            client.auth.awaitInitialization()
+            
+            client.auth.updateUser {
+                password = newPassword
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(handleNetworkError(e, "Error al actualizar contraseña"))
         }
     }
 

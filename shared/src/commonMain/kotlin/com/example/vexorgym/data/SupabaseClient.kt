@@ -14,7 +14,10 @@ fun createVexorGymSupabaseClient(): SupabaseClient = createSupabaseClient(
     supabaseKey = "sb_publishable_IyOIy-medA5Or3MxOYoLwg_OqW66jg2",
 ) {
     install(Postgrest)
-    install(Auth)
+    install(Auth) {
+        scheme = "vexorgym"
+        host = "reset-password"
+    }
 }
 
 val supabaseClient: SupabaseClient = createVexorGymSupabaseClient()

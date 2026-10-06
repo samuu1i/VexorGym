@@ -328,16 +328,6 @@ private fun SessionCard(
                         color = Color(0xFF79747E),
                     )
                 }
-                // Pill Completada
-                Box(
-                    modifier = Modifier.background(Color(0xFFE8F5E9), RoundedCornerShape(16.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF388E3C), modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Completada", color = Color(0xFF388E3C), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    }
-                }
                 Spacer(Modifier.width(8.dp))
                 IconButton(onClick = onDeleteSession, modifier = Modifier.size(24.dp)) {
                     Icon(

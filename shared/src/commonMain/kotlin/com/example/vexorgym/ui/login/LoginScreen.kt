@@ -39,6 +39,7 @@ import com.example.vexorgym.di.AppContainer
 @Composable
 fun LoginRoute(
     onLoginSuccess: () -> Unit,
+    onForgotPasswordClick: () -> Unit,
     viewModel: LoginViewModel = viewModel {
         LoginViewModel(AppContainer.gymRepository)
     },
@@ -55,6 +56,7 @@ fun LoginRoute(
         onPasswordChange = viewModel::onPasswordChange,
         onLoginClick = viewModel::login,
         onRegisterClick = viewModel::register,
+        onForgotPasswordClick = onForgotPasswordClick
     )
 }
 
@@ -65,6 +67,7 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onLoginClick: () -> Unit,
     onRegisterClick: () -> Unit,
+    onForgotPasswordClick: () -> Unit,
 ) {
     val hasError = uiState.errorMessage != null
     var passwordVisible by remember { mutableStateOf(false) }
@@ -113,6 +116,21 @@ fun LoginScreen(
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
+        
+        // Forgot password link
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            androidx.compose.material3.TextButton(onClick = onForgotPasswordClick) {
+                Text(
+                    "¿Olvidaste tu contraseña?",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
         uiState.errorMessage?.let { message ->
             Spacer(Modifier.height(12.dp))
             Text(

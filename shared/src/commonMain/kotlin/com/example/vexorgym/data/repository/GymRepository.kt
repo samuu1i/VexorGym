@@ -14,6 +14,9 @@ interface GymRepository {
     suspend fun register(email: String, password: String): Result<Boolean>
     suspend fun logout(): Result<Unit>
     suspend fun hasValidSession(): Boolean
+    
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit>
+    suspend fun updatePassword(newPassword: String): Result<Unit>
 
     fun observeRoutine(): Flow<Routine>
 

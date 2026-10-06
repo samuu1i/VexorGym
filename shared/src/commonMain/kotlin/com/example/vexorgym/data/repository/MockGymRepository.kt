@@ -68,6 +68,16 @@ class MockGymRepository : GymRepository {
         return Result.success(true)
     }
 
+    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        delay(400)
+        return Result.success(Unit)
+    }
+
+    override suspend fun updatePassword(newPassword: String): Result<Unit> {
+        delay(400)
+        return Result.success(Unit)
+    }
+
     override suspend fun logout(): Result<Unit> {
         delay(200)
         return Result.success(Unit)
