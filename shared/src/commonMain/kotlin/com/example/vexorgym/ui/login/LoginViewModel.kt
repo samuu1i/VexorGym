@@ -18,6 +18,14 @@ class LoginViewModel(
 
     init {
         viewModelScope.launch {
+            com.example.vexorgym.ui.navigation.DeepLinkManager.deepLinkError.collect { error ->
+                if (error != null) {
+                    _uiState.update { it.copy(errorMessage = error) }
+                    com.example.vexorgym.ui.navigation.DeepLinkManager.onErrorHandled()
+                }
+            }
+        }
+        viewModelScope.launch {
             if (repository.hasValidSession()) {
                 _uiState.update { it.copy(isLoggedIn = true) }
             }
