@@ -223,7 +223,7 @@ class RemoteGymRepository(
     }
 
     override fun observeExercise(exerciseId: String): Flow<Exercise?> = flow {
-        refreshAll()
+        refreshAll(offlineFirst = true)
         emitAll(
             exercisesCache.map { exercises ->
                 exercises[exerciseId]
