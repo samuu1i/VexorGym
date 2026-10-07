@@ -454,7 +454,8 @@ class RemoteGymRepository(
             sessionId = sessionId,
             weightKg = weightKg,
             repetitions = repetitions,
-            dateCreated = kotlin.time.Clock.System.now().toString()
+            dateCreated = kotlin.time.Clock.System.now().toString(),
+            isPending = true
         )
 
         // 1. Actualización Optimista
@@ -477,9 +478,37 @@ class RemoteGymRepository(
             client.from("sets").insert(
                 SetInsert(id = setId, sessionId = sessionId, weight = weightKg, reps = repetitions)
             )
-            localDataSource?.saveSet(optimisticSet)
+            
+            val confirmedSet = optimisticSet.copy(isPending = false)
+            localDataSource?.saveSet(confirmedSet)
+            
+            mutex.withLock {
+                exercisesCache.update { cache ->
+                    val exercise = cache[exerciseId] ?: return@update cache
+                    val updatedSessions = exercise.sessions.map { session ->
+                        if (session.id == sessionId) {
+                            val newSets = session.sets.map { if (it.id == setId) confirmedSet else it }
+                            session.copy(sets = newSets.sortedBy { it.createdAtMillis })
+                        } else {
+                            session
+                        }
+                    }
+                    cache + (exerciseId to exercise.copy(sessions = updatedSessions))
+                }
+            }
             Result.success(Unit)
         } catch (error: Exception) {
+            val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
+            
+            if (isNetworkError) {
+                try {
+                    localDataSource?.saveSet(optimisticSet)
+                    return Result.success(Unit)
+                } catch (e: Exception) {
+                    // Fallback to rollback
+                }
+            }
+            
             // 3. Rollback
             mutex.withLock {
                 exercisesCache.update { cache ->

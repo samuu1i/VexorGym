@@ -23,7 +23,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                         sessionId = set.session_id,
                         weightKg = set.weight,
                         repetitions = set.reps.toInt(),
-                        dateCreated = set.date_created
+                        dateCreated = set.date_created,
+                        isPending = set.is_pending != 0L
                     )
                 }.sortedBy { it.createdAtMillis }
                 
@@ -72,7 +73,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                             session_id = session.id,
                             weight = set.weightKg,
                             reps = set.repetitions.toLong(),
-                            date_created = set.dateCreated
+                            date_created = set.dateCreated,
+                            is_pending = if (set.isPending) 1L else 0L
                         )
                     }
                 }
@@ -108,7 +110,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                     session_id = session.id,
                     weight = set.weightKg,
                     reps = set.repetitions.toLong(),
-                    date_created = set.dateCreated
+                    date_created = set.dateCreated,
+                    is_pending = if (set.isPending) 1L else 0L
                 )
             }
         }
@@ -124,7 +127,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
             session_id = set.sessionId,
             weight = set.weightKg,
             reps = set.repetitions.toLong(),
-            date_created = set.dateCreated
+            date_created = set.dateCreated,
+            is_pending = if (set.isPending) 1L else 0L
         )
     }
 
