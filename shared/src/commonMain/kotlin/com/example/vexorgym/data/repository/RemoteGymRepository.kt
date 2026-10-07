@@ -197,7 +197,7 @@ class RemoteGymRepository(
     }
 
     override fun observeRoutine(): Flow<Routine> = flow {
-        refreshAll()
+        refreshAll(offlineFirst = true)
         emitAll(
             combine(exercisesCache, routineMeta) { exercises, meta ->
                 Routine(
@@ -214,7 +214,7 @@ class RemoteGymRepository(
     }
 
     override fun observeCatalog(): Flow<List<Exercise>> = flow {
-        refreshAll()
+        refreshAll(offlineFirst = true)
         emitAll(
             exercisesCache.map { exercises ->
                 exercises.values.sortedBy { it.name }
@@ -561,11 +561,31 @@ class RemoteGymRepository(
         }
     }
 
-    private suspend fun refreshAll(force: Boolean = false) {
+    private suspend fun refreshAll(force: Boolean = false, offlineFirst: Boolean = false) {
+        val uid = client.auth.currentUserOrNull()?.id ?: return
+
         mutex.withLock {
             if (cacheLoaded && !force) return
+            
+            // 1. Carga local como fallback/local-first
+            if (offlineFirst && !cacheLoaded) {
+                val localExercises = localDataSource?.getExercises(uid) ?: emptyList()
+                val localRoutine = localDataSource?.getUserRoutine(uid)
+                
+                if (localExercises.isNotEmpty() || localRoutine != null) {
+                    exercisesCache.value = localExercises.associateBy { it.id }
+                    if (localRoutine != null) {
+                        routineMeta.update { current -> current.copy(exerciseIdsByDay = localRoutine) }
+                        routineSeeded = true
+                    } else {
+                        seedRoutineIfNeeded(localExercises.map { it.id })
+                    }
+                }
+            }
+
             _isLoading.value = true
             try {
+                // 2. Carga remota
                 val rows = client.from("exercises")
                     .select(Columns.raw("*, sessions(*, sets(*))"))
                     .decodeList<Exercise>()
@@ -593,18 +613,13 @@ class RemoteGymRepository(
                 
                 exercisesCache.value = mapped
                 
-                val uid = client.auth.currentUserOrNull()?.id
-                if (uid != null) {
-                    localDataSource?.clearUserData(uid)
-                    localDataSource?.saveExercises(uid, mapped.values.toList())
-                }
+                localDataSource?.clearUserData(uid)
+                localDataSource?.saveExercises(uid, mapped.values.toList())
                 
                 if (userMap != null) {
                     routineMeta.update { current -> current.copy(exerciseIdsByDay = userMap) }
                     routineSeeded = true
-                    if (uid != null) {
-                        localDataSource?.saveUserRoutine(uid, userMap)
-                    }
+                    localDataSource?.saveUserRoutine(uid, userMap)
                 } else {
                     seedRoutineIfNeeded(mapped.keys.toList())
                 }
@@ -613,11 +628,13 @@ class RemoteGymRepository(
                 _error.value = null
             } catch (error: Exception) {
                 _error.value = error.message ?: "Error al conectar con el servidor."
-                if (!cacheLoaded) {
+                
+                // Si estamos en offlineFirst y falló la red pero teníamos datos locales, damos la carga por buena.
+                if (offlineFirst && exercisesCache.value.isNotEmpty()) {
+                    cacheLoaded = true
+                } else if (!cacheLoaded) {
                     exercisesCache.value = emptyMap()
                 }
-                // En vez de crashear la app propagando la excepción (throw error), 
-                // solo informamos el estado para que la UI se renderice vacía o con error controlado.
                 println("Error en refreshAll: ${error.message}")
             } finally {
                 _isLoading.value = false
