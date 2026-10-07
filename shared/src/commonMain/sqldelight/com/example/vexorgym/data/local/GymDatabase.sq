@@ -1,0 +1,82 @@
+CREATE TABLE exerciseEntity (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    muscle_group TEXT NOT NULL
+);
+
+CREATE TABLE sessionEntity (
+    id TEXT PRIMARY KEY NOT NULL,
+    exercise_id TEXT NOT NULL,
+    date_created TEXT,
+    FOREIGN KEY(exercise_id) REFERENCES exerciseEntity(id) ON DELETE CASCADE
+);
+
+CREATE TABLE setEntity (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT NOT NULL,
+    weight REAL NOT NULL,
+    reps INTEGER NOT NULL,
+    date_created TEXT,
+    FOREIGN KEY(session_id) REFERENCES sessionEntity(id) ON DELETE CASCADE
+);
+
+CREATE TABLE userRoutineEntity (
+    user_id TEXT PRIMARY KEY NOT NULL,
+    routine_data TEXT NOT NULL
+);
+
+-- Exercises
+insertOrReplaceExercise:
+INSERT OR REPLACE INTO exerciseEntity(id, name, muscle_group)
+VALUES (?, ?, ?);
+
+getAllExercises:
+SELECT * FROM exerciseEntity;
+
+getExerciseById:
+SELECT * FROM exerciseEntity WHERE id = ?;
+
+deleteExerciseById:
+DELETE FROM exerciseEntity WHERE id = ?;
+
+deleteAllExercises:
+DELETE FROM exerciseEntity;
+
+-- Sessions
+insertOrReplaceSession:
+INSERT OR REPLACE INTO sessionEntity(id, exercise_id, date_created)
+VALUES (?, ?, ?);
+
+getSessionsByExerciseId:
+SELECT * FROM sessionEntity WHERE exercise_id = ?;
+
+deleteSessionById:
+DELETE FROM sessionEntity WHERE id = ?;
+
+deleteAllSessions:
+DELETE FROM sessionEntity;
+
+-- Sets
+insertOrReplaceSet:
+INSERT OR REPLACE INTO setEntity(id, session_id, weight, reps, date_created)
+VALUES (?, ?, ?, ?, ?);
+
+getSetsBySessionId:
+SELECT * FROM setEntity WHERE session_id = ?;
+
+deleteSetById:
+DELETE FROM setEntity WHERE id = ?;
+
+deleteAllSets:
+DELETE FROM setEntity;
+
+-- User Routines
+insertOrReplaceUserRoutine:
+INSERT OR REPLACE INTO userRoutineEntity(user_id, routine_data)
+VALUES (?, ?);
+
+getUserRoutine:
+SELECT * FROM userRoutineEntity WHERE user_id = ?;
+
+deleteUserRoutine:
+DELETE FROM userRoutineEntity WHERE user_id = ?;

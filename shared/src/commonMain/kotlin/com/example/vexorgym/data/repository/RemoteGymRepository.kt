@@ -4,6 +4,7 @@ import com.example.vexorgym.data.model.Exercise
 import com.example.vexorgym.data.model.Routine
 import com.example.vexorgym.data.model.WeekDay
 import com.example.vexorgym.data.model.WorkoutSession
+import com.example.vexorgym.data.local.LocalGymDataSource
 import com.example.vexorgym.data.supabaseClient
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -28,6 +29,7 @@ import kotlinx.serialization.Serializable
 
 class RemoteGymRepository(
     private val client: SupabaseClient = supabaseClient,
+    private val localDataSource: LocalGymDataSource? = null
 ) : GymRepository {
 
     private val mutex = Mutex()
@@ -233,6 +235,7 @@ class RemoteGymRepository(
         try {
             val uid = client.auth.currentUserOrNull()?.id ?: return
             client.from("user_routines").upsert(UserRoutine(userId = uid, routineData = newMap))
+            localDataSource?.saveUserRoutine(uid, newMap)
         } catch (e: Exception) {
             println("Error saving routine: ${e.message}")
         }
@@ -270,6 +273,8 @@ class RemoteGymRepository(
                     select()
                 }
                 .decodeSingle<Exercise>()
+                
+            localDataSource?.saveExercise(created)
                 
             var newMapToSave: Map<WeekDay, List<String>>? = null
             mutex.withLock {
@@ -313,6 +318,8 @@ class RemoteGymRepository(
             // Gracias a ON DELETE CASCADE, también se borran sus sesiones y series.
             client.from("exercises").delete { filter { eq("id", exerciseId) } }
             
+            localDataSource?.deleteExercise(exerciseId)
+            
             // Si la base de datos respondió OK, eliminamos localmente del caché para no verlo más
             mutex.withLock {
                 exercisesCache.update { current -> current - exerciseId }
@@ -335,6 +342,7 @@ class RemoteGymRepository(
         return try {
             val uid = client.auth.currentUserOrNull()?.id ?: return Result.failure(Exception("No session"))
             client.from("user_routines").upsert(UserRoutine(userId = uid, routineData = newMap))
+            localDataSource?.saveUserRoutine(uid, newMap)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(handleNetworkError(e, "Error al guardar el orden"))
@@ -365,6 +373,7 @@ class RemoteGymRepository(
         return try {
             // 2. Operación de red en segundo plano (sin decodeSingle, fire-and-forget con confirmación)
             client.from("sessions").insert(SessionInsert(id = sessionId, exerciseId = exerciseId))
+            localDataSource?.saveSession(optimisticSession)
             Result.success(Unit)
         } catch (error: Exception) {
             // 3. Rollback exacto en caso de fallo (RLS, Red, etc)
@@ -407,6 +416,7 @@ class RemoteGymRepository(
         return try {
             // 2. Red
             client.from("sessions").delete { filter { eq("id", sessionId) } }
+            localDataSource?.deleteSession(sessionId)
             Result.success(Unit)
         } catch (error: Exception) {
             // 3. Rollback: Volvemos a insertar la sesión eliminada optimísticamente
@@ -464,6 +474,7 @@ class RemoteGymRepository(
             client.from("sets").insert(
                 SetInsert(id = setId, sessionId = sessionId, weight = weightKg, reps = repetitions)
             )
+            localDataSource?.saveSet(optimisticSet)
             Result.success(Unit)
         } catch (error: Exception) {
             // 3. Rollback
@@ -524,6 +535,7 @@ class RemoteGymRepository(
         return try {
             // 2. Red
             client.from("sets").delete { filter { eq("id", setId) } }
+            localDataSource?.deleteSet(setId)
             Result.success(Unit)
         } catch (error: Exception) {
             // 3. Rollback
@@ -578,9 +590,15 @@ class RemoteGymRepository(
                 
                 exercisesCache.value = mapped
                 
+                localDataSource?.clearAll()
+                localDataSource?.saveExercises(mapped.values.toList())
+                
                 if (userMap != null) {
                     routineMeta.update { current -> current.copy(exerciseIdsByDay = userMap) }
                     routineSeeded = true
+                    client.auth.currentUserOrNull()?.id?.let { uid ->
+                        localDataSource?.saveUserRoutine(uid, userMap)
+                    }
                 } else {
                     seedRoutineIfNeeded(mapped.keys.toList())
                 }
