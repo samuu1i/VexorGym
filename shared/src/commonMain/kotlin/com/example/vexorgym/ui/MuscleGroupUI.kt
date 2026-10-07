@@ -54,7 +54,7 @@ fun MuscleGroupImage(muscleGroup: String, modifier: Modifier = Modifier, iconSiz
             painter = painter,
             contentDescription = muscleGroup,
             contentScale = ContentScale.Crop, 
-            modifier = Modifier.size((iconSize * 2.0).dp) // Aumentamos el tamaño interno visual
+            modifier = Modifier.size((iconSize * 2.0).dp)
         )
     }
 }

@@ -1,5 +1,7 @@
 package com.example.vexorgym.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,7 +68,13 @@ fun AppNavHost(
                 }
             )
         }
-        composable(AppRoutes.WEEKLY_ROUTINE) {
+        composable(
+            route = AppRoutes.WEEKLY_ROUTINE,
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None }
+        ) {
             WeeklyRoutineRoute(
                 onExerciseClick = { exerciseId ->
                     navController.navigate(AppRoutes.exerciseDetail(exerciseId))
@@ -83,6 +91,10 @@ fun AppNavHost(
             arguments = listOf(
                 navArgument("exerciseId") { type = NavType.StringType },
             ),
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None }
         ) { backStackEntry ->
             val exerciseId = backStackEntry.arguments?.read {
                 getStringOrNull("exerciseId")
