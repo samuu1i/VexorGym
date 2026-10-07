@@ -1,5 +1,6 @@
 CREATE TABLE exerciseEntity (
     id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     muscle_group TEXT NOT NULL
 );
@@ -27,20 +28,17 @@ CREATE TABLE userRoutineEntity (
 
 -- Exercises
 insertOrReplaceExercise:
-INSERT OR REPLACE INTO exerciseEntity(id, name, muscle_group)
-VALUES (?, ?, ?);
+INSERT OR REPLACE INTO exerciseEntity(id, user_id, name, muscle_group)
+VALUES (?, ?, ?, ?);
 
-getAllExercises:
-SELECT * FROM exerciseEntity;
-
-getExerciseById:
-SELECT * FROM exerciseEntity WHERE id = ?;
+getExercisesByUserId:
+SELECT * FROM exerciseEntity WHERE user_id = ?;
 
 deleteExerciseById:
 DELETE FROM exerciseEntity WHERE id = ?;
 
-deleteAllExercises:
-DELETE FROM exerciseEntity;
+deleteExercisesByUserId:
+DELETE FROM exerciseEntity WHERE user_id = ?;
 
 -- Sessions
 insertOrReplaceSession:

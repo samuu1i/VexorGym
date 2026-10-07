@@ -13,11 +13,50 @@ import kotlinx.coroutines.withContext
 class LocalGymDataSource(private val db: GymDatabase) {
     private val queries = db.gymDatabaseQueries
 
-    suspend fun saveExercises(exercises: List<Exercise>) = withContext(Dispatchers.IO) {
+    suspend fun getExercises(userId: String): List<Exercise> = withContext(Dispatchers.IO) {
+        val exercises = queries.getExercisesByUserId(userId).executeAsList()
+        exercises.map { ext ->
+            val sessions = queries.getSessionsByExerciseId(ext.id).executeAsList().map { sess ->
+                val sets = queries.getSetsBySessionId(sess.id).executeAsList().map { set ->
+                    WorkoutSet(
+                        id = set.id,
+                        sessionId = set.session_id,
+                        weightKg = set.weight,
+                        repetitions = set.reps.toInt(),
+                        dateCreated = set.date_created
+                    )
+                }.sortedBy { it.createdAtMillis }
+                
+                WorkoutSession(
+                    id = sess.id,
+                    exerciseId = sess.exercise_id,
+                    dateCreated = sess.date_created,
+                    sets = sets
+                )
+            }.sortedBy { it.createdAtMillis }
+            
+            Exercise(
+                id = ext.id,
+                name = ext.name,
+                muscleGroup = ext.muscle_group,
+                sessions = sessions
+            )
+        }
+    }
+
+    suspend fun getUserRoutine(userId: String): Map<WeekDay, List<String>>? = withContext(Dispatchers.IO) {
+        val row = queries.getUserRoutine(userId).executeAsOneOrNull()
+        row?.let {
+            Json.decodeFromString(it.routine_data)
+        }
+    }
+
+    suspend fun saveExercises(userId: String, exercises: List<Exercise>) = withContext(Dispatchers.IO) {
         queries.transaction {
             exercises.forEach { exercise ->
                 queries.insertOrReplaceExercise(
                     id = exercise.id,
+                    user_id = userId,
                     name = exercise.name,
                     muscle_group = exercise.muscleGroup
                 )
@@ -41,10 +80,11 @@ class LocalGymDataSource(private val db: GymDatabase) {
         }
     }
 
-    suspend fun saveExercise(exercise: Exercise) = withContext(Dispatchers.IO) {
+    suspend fun saveExercise(userId: String, exercise: Exercise) = withContext(Dispatchers.IO) {
         queries.transaction {
             queries.insertOrReplaceExercise(
                 id = exercise.id,
+                user_id = userId,
                 name = exercise.name,
                 muscle_group = exercise.muscleGroup
             )
@@ -101,11 +141,10 @@ class LocalGymDataSource(private val db: GymDatabase) {
         queries.deleteUserRoutine(userId)
     }
     
-    suspend fun clearAll() = withContext(Dispatchers.IO) {
+    suspend fun clearUserData(userId: String) = withContext(Dispatchers.IO) {
         queries.transaction {
-            queries.deleteAllSets()
-            queries.deleteAllSessions()
-            queries.deleteAllExercises()
+            queries.deleteExercisesByUserId(userId)
+            queries.deleteUserRoutine(userId)
         }
     }
 }

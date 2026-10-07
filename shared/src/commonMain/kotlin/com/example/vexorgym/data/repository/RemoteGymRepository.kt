@@ -274,7 +274,10 @@ class RemoteGymRepository(
                 }
                 .decodeSingle<Exercise>()
                 
-            localDataSource?.saveExercise(created)
+            val uid = client.auth.currentUserOrNull()?.id
+            if (uid != null) {
+                localDataSource?.saveExercise(uid, created)
+            }
                 
             var newMapToSave: Map<WeekDay, List<String>>? = null
             mutex.withLock {
@@ -590,13 +593,16 @@ class RemoteGymRepository(
                 
                 exercisesCache.value = mapped
                 
-                localDataSource?.clearAll()
-                localDataSource?.saveExercises(mapped.values.toList())
+                val uid = client.auth.currentUserOrNull()?.id
+                if (uid != null) {
+                    localDataSource?.clearUserData(uid)
+                    localDataSource?.saveExercises(uid, mapped.values.toList())
+                }
                 
                 if (userMap != null) {
                     routineMeta.update { current -> current.copy(exerciseIdsByDay = userMap) }
                     routineSeeded = true
-                    client.auth.currentUserOrNull()?.id?.let { uid ->
+                    if (uid != null) {
                         localDataSource?.saveUserRoutine(uid, userMap)
                     }
                 } else {
