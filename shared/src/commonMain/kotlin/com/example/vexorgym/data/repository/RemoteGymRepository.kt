@@ -610,6 +610,34 @@ class RemoteGymRepository(
         }
     }
 
+    private suspend fun syncPendingData(userId: String) {
+        // 1. Sincronizar sesiones pendientes
+        val pendingSessions = localDataSource?.getPendingSessions(userId) ?: emptyList()
+        for (session in pendingSessions) {
+            try {
+                client.from("sessions").upsert(
+                    SessionInsert(id = session.id, exerciseId = session.exerciseId)
+                )
+                localDataSource?.markSessionSynced(session.id)
+            } catch (e: Exception) {
+                // Si falla, se conservará como pending
+            }
+        }
+        
+        // 2. Sincronizar series pendientes
+        val pendingSets = localDataSource?.getPendingSets(userId) ?: emptyList()
+        for (set in pendingSets) {
+            try {
+                client.from("sets").upsert(
+                    SetInsert(id = set.id, sessionId = set.sessionId, weight = set.weightKg, reps = set.repetitions)
+                )
+                localDataSource?.markSetSynced(set.id)
+            } catch (e: Exception) {
+                // Si falla, se conservará como pending
+            }
+        }
+    }
+
     private suspend fun refreshAll(force: Boolean = false, offlineFirst: Boolean = false) {
         val uid = client.auth.currentUserOrNull()?.id ?: return
 
@@ -634,6 +662,8 @@ class RemoteGymRepository(
 
             _isLoading.value = true
             try {
+                syncPendingData(uid)
+
                 // 2. Carga remota
                 val rows = client.from("exercises")
                     .select(Columns.raw("*, sessions(*, sets(*))"))

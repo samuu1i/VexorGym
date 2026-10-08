@@ -52,6 +52,39 @@ class LocalGymDataSource(private val db: GymDatabase) {
         }
     }
 
+    suspend fun getPendingSessions(userId: String): List<WorkoutSession> = withContext(Dispatchers.IO) {
+        queries.getPendingSessionsByUserId(userId).executeAsList().map { sess ->
+            WorkoutSession(
+                id = sess.id,
+                exerciseId = sess.exercise_id,
+                dateCreated = sess.date_created,
+                sets = emptyList(),
+                isPending = sess.is_pending != 0L
+            )
+        }
+    }
+
+    suspend fun markSessionSynced(sessionId: String) = withContext(Dispatchers.IO) {
+        queries.markSessionSynced(sessionId)
+    }
+
+    suspend fun getPendingSets(userId: String): List<WorkoutSet> = withContext(Dispatchers.IO) {
+        queries.getPendingSetsByUserId(userId).executeAsList().map { set ->
+            WorkoutSet(
+                id = set.id,
+                sessionId = set.session_id,
+                weightKg = set.weight,
+                repetitions = set.reps.toInt(),
+                dateCreated = set.date_created,
+                isPending = set.is_pending != 0L
+            )
+        }
+    }
+
+    suspend fun markSetSynced(setId: String) = withContext(Dispatchers.IO) {
+        queries.markSetSynced(setId)
+    }
+
     suspend fun saveExercises(userId: String, exercises: List<Exercise>) = withContext(Dispatchers.IO) {
         queries.transaction {
             exercises.forEach { exercise ->

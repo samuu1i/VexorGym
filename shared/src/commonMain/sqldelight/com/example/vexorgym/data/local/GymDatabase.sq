@@ -50,6 +50,15 @@ VALUES (?, ?, ?, ?);
 getSessionsByExerciseId:
 SELECT * FROM sessionEntity WHERE exercise_id = ?;
 
+getPendingSessionsByUserId:
+SELECT sessionEntity.*
+FROM sessionEntity
+INNER JOIN exerciseEntity ON sessionEntity.exercise_id = exerciseEntity.id
+WHERE exerciseEntity.user_id = ? AND sessionEntity.is_pending = 1;
+
+markSessionSynced:
+UPDATE sessionEntity SET is_pending = 0 WHERE id = ?;
+
 deleteSessionById:
 DELETE FROM sessionEntity WHERE id = ?;
 
@@ -63,6 +72,16 @@ VALUES (?, ?, ?, ?, ?, ?);
 
 getSetsBySessionId:
 SELECT * FROM setEntity WHERE session_id = ?;
+
+getPendingSetsByUserId:
+SELECT setEntity.*
+FROM setEntity
+INNER JOIN sessionEntity ON setEntity.session_id = sessionEntity.id
+INNER JOIN exerciseEntity ON sessionEntity.exercise_id = exerciseEntity.id
+WHERE exerciseEntity.user_id = ? AND setEntity.is_pending = 1 AND sessionEntity.is_pending = 0;
+
+markSetSynced:
+UPDATE setEntity SET is_pending = 0 WHERE id = ?;
 
 deleteSetById:
 DELETE FROM setEntity WHERE id = ?;
