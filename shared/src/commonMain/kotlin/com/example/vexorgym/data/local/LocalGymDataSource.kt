@@ -24,7 +24,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                         weightKg = set.weight,
                         repetitions = set.reps.toInt(),
                         dateCreated = set.date_created,
-                        isPending = set.is_pending != 0L
+                        isPending = set.is_pending != 0L,
+                        isDeleted = set.is_deleted != 0L
                     )
                 }.sortedBy { it.createdAtMillis }
                 
@@ -70,13 +71,14 @@ class LocalGymDataSource(private val db: GymDatabase) {
 
     suspend fun getPendingSets(userId: String): List<WorkoutSet> = withContext(Dispatchers.IO) {
         queries.getPendingSetsByUserId(userId).executeAsList().map { set ->
-            WorkoutSet(
+                WorkoutSet(
                 id = set.id,
                 sessionId = set.session_id,
                 weightKg = set.weight,
                 repetitions = set.reps.toInt(),
                 dateCreated = set.date_created,
-                isPending = set.is_pending != 0L
+                isPending = set.is_pending != 0L,
+                isDeleted = set.is_deleted != 0L
             )
         }
     }
@@ -108,7 +110,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                             weight = set.weightKg,
                             reps = set.repetitions.toLong(),
                             date_created = set.dateCreated,
-                            is_pending = if (set.isPending) 1L else 0L
+                            is_pending = if (set.isPending) 1L else 0L,
+                            is_deleted = if (set.isDeleted) 1L else 0L
                         )
                     }
                 }
@@ -146,7 +149,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                     weight = set.weightKg,
                     reps = set.repetitions.toLong(),
                     date_created = set.dateCreated,
-                    is_pending = if (set.isPending) 1L else 0L
+                    is_pending = if (set.isPending) 1L else 0L,
+                    is_deleted = if (set.isDeleted) 1L else 0L
                 )
             }
         }
@@ -163,8 +167,17 @@ class LocalGymDataSource(private val db: GymDatabase) {
             weight = set.weightKg,
             reps = set.repetitions.toLong(),
             date_created = set.dateCreated,
-            is_pending = if (set.isPending) 1L else 0L
+            is_pending = if (set.isPending) 1L else 0L,
+            is_deleted = if (set.isDeleted) 1L else 0L
         )
+    }
+
+    suspend fun markSetAsDeleted(setId: String) = withContext(Dispatchers.IO) {
+        queries.markSetAsDeleted(setId)
+    }
+
+    suspend fun getPendingDeletedSets(userId: String): List<String> = withContext(Dispatchers.IO) {
+        queries.getPendingDeletedSetsByUserId(userId).executeAsList()
     }
 
     suspend fun deleteSet(id: String) = withContext(Dispatchers.IO) {

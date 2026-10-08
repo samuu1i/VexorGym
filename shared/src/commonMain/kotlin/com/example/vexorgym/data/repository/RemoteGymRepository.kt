@@ -590,6 +590,21 @@ class RemoteGymRepository(
             localDataSource?.deleteSet(setId)
             Result.success(Unit)
         } catch (error: Exception) {
+            val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
+            
+            if (isNetworkError) {
+                try {
+                    if (capturedSet.isPending) {
+                        localDataSource?.deleteSet(setId)
+                    } else {
+                        localDataSource?.markSetAsDeleted(setId)
+                    }
+                    return Result.success(Unit)
+                } catch (e: Exception) {
+                    // Fallback to rollback
+                }
+            }
+            
             // 3. Rollback
             mutex.withLock {
                 exercisesCache.update { cache ->
@@ -611,6 +626,17 @@ class RemoteGymRepository(
     }
 
     private suspend fun syncPendingData(userId: String) {
+        // 0. Sincronizar eliminaciones de series
+        val pendingDeletedSets = localDataSource?.getPendingDeletedSets(userId) ?: emptyList()
+        for (setId in pendingDeletedSets) {
+            try {
+                client.from("sets").delete { filter { eq("id", setId) } }
+                localDataSource?.deleteSet(setId)
+            } catch (e: Exception) {
+                // Si falla, se conserva
+            }
+        }
+
         // 1. Sincronizar sesiones pendientes
         val pendingSessions = localDataSource?.getPendingSessions(userId) ?: emptyList()
         for (session in pendingSessions) {

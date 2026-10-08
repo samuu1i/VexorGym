@@ -14,4 +14,5 @@ data class WorkoutSet(
     @SerialName("created_at") val dateCreated: String? = null,
     @Transient val createdAtMillis: Long = parsePostgresTimestamp(dateCreated),
     @Transient val isPending: Boolean = false,
+    @Transient val isDeleted: Boolean = false,
 )
