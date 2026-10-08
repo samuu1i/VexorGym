@@ -361,7 +361,8 @@ class RemoteGymRepository(
             id = sessionId,
             exerciseId = exerciseId,
             dateCreated = kotlin.time.Clock.System.now().toString(),
-            sets = emptyList()
+            sets = emptyList(),
+            isPending = true
         )
 
         // 1. Actualización Optimista local instantánea
@@ -376,9 +377,28 @@ class RemoteGymRepository(
         return try {
             // 2. Operación de red en segundo plano (sin decodeSingle, fire-and-forget con confirmación)
             client.from("sessions").insert(SessionInsert(id = sessionId, exerciseId = exerciseId))
-            localDataSource?.saveSession(optimisticSession)
+            val confirmedSession = optimisticSession.copy(isPending = false)
+            localDataSource?.saveSession(confirmedSession)
+            mutex.withLock {
+                exercisesCache.update { cache ->
+                    val exercise = cache[exerciseId] ?: return@update cache
+                    val updatedSessions = exercise.sessions.map { if (it.id == sessionId) confirmedSession else it }
+                    cache + (exerciseId to exercise.copy(sessions = updatedSessions.sortedBy { it.createdAtMillis }))
+                }
+            }
             Result.success(Unit)
         } catch (error: Exception) {
+            val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
+            
+            if (isNetworkError) {
+                try {
+                    localDataSource?.saveSession(optimisticSession)
+                    return Result.success(Unit)
+                } catch (e: Exception) {
+                    // Fallback to rollback
+                }
+            }
+            
             // 3. Rollback exacto en caso de fallo (RLS, Red, etc)
             mutex.withLock {
                 exercisesCache.update { cache ->

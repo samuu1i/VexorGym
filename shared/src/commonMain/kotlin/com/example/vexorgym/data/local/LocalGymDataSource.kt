@@ -65,7 +65,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                     queries.insertOrReplaceSession(
                         id = session.id,
                         exercise_id = exercise.id,
-                        date_created = session.dateCreated
+                        date_created = session.dateCreated,
+                        is_pending = if (session.isPending) 1L else 0L
                     )
                     session.sets.forEach { set ->
                         queries.insertOrReplaceSet(
@@ -102,7 +103,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
             queries.insertOrReplaceSession(
                 id = session.id,
                 exercise_id = session.exerciseId,
-                date_created = session.dateCreated
+                date_created = session.dateCreated,
+                is_pending = if (session.isPending) 1L else 0L
             )
             session.sets.forEach { set ->
                 queries.insertOrReplaceSet(

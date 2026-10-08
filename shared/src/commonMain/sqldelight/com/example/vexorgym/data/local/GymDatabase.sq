@@ -9,6 +9,7 @@ CREATE TABLE sessionEntity (
     id TEXT PRIMARY KEY NOT NULL,
     exercise_id TEXT NOT NULL,
     date_created TEXT,
+    is_pending INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(exercise_id) REFERENCES exerciseEntity(id) ON DELETE CASCADE
 );
 
@@ -43,8 +44,8 @@ DELETE FROM exerciseEntity WHERE user_id = ?;
 
 -- Sessions
 insertOrReplaceSession:
-INSERT OR REPLACE INTO sessionEntity(id, exercise_id, date_created)
-VALUES (?, ?, ?);
+INSERT OR REPLACE INTO sessionEntity(id, exercise_id, date_created, is_pending)
+VALUES (?, ?, ?, ?);
 
 getSessionsByExerciseId:
 SELECT * FROM sessionEntity WHERE exercise_id = ?;
