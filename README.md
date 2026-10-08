@@ -476,6 +476,22 @@ La versión entregada priorizó la implementación funcional y el QA manual dent
 No se incluyó una suite amplia de tests unitarios ni un pipeline de CI completo.
 
 ---
+## 🔐 Backend y seguridad
+
+VexorGym utiliza **Supabase** como backend para autenticación y persistencia de datos.
+
+El repositorio contiene el código necesario para interactuar con Supabase y la estructura utilizada por la aplicación, pero **no incluye una copia de la base de datos con datos personales ni credenciales privadas**.
+
+Por motivos de seguridad, no se incluyen en el repositorio:
+
+* Contraseñas.
+* `service_role` key.
+* Credenciales privadas del proyecto.
+* Acceso al dashboard de Supabase.
+* Dumps de la base de datos con información de usuarios.
+* Archivos de la base local SQLite/SQLDelight con datos reales.
+
+El APK entregado se encuentra configurado para utilizar el backend utilizado durante el desarrollo y evaluación del proyecto.
 
 ## 🔮 Mejoras futuras
 
