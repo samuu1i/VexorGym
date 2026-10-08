@@ -1,320 +1,516 @@
-VexorGym es una aplicación móvil multiplataforma para registrar y consultar entrenamientos de gimnasio de forma simple y rápida.
+# VexorGym 🏋️
 
-Está pensada principalmente para personas que ya tienen experiencia entrenando y prefieren crear sus propias rutinas en lugar de utilizar rutinas guiadas. El objetivo es facilitar el seguimiento del rendimiento anterior de cada ejercicio para aplicar sobrecarga progresiva de forma sencilla.
+VexorGym es una aplicación móvil multiplataforma orientada a personas que ya tienen experiencia entrenando y prefieren una herramienta simple para registrar y consultar sus entrenamientos.
+
+La aplicación está pensada alrededor de un concepto sencillo: en lugar de enseñar al usuario cómo entrenar, le permite consultar rápidamente cómo fue su entrenamiento anterior y registrar nuevas sesiones, series y ejercicios para aplicar sobrecarga progresiva.
+
+El proyecto fue desarrollado como parte del **Challenge Técnico - Software Engineer Mobile de AranguriApps 2026**.
+
+---
+
+## 🎯 Objetivo
+
+VexorGym busca resolver una necesidad concreta:
+
+> Registrar entrenamientos y consultar rápidamente el historial reciente para poder progresar en cargas y repeticiones sin una interfaz innecesariamente compleja.
+
+La aplicación permite gestionar:
+
+* Ejercicios.
+* Grupos musculares.
+* Rutina semanal.
+* Sesiones de entrenamiento.
+* Series con peso y repeticiones.
+* Historial de entrenamientos.
+* Persistencia local para utilizar parte de la aplicación sin conexión.
+* Sincronización de datos con Supabase al recuperar Internet.
+
+---
 
 ## ✨ Funcionalidades
 
-* Registro e inicio de sesión de usuarios.
-* Creación y organización de ejercicios por día de la semana.
-* Reordenamiento de ejercicios mediante drag & drop.
-* Registro de sesiones de entrenamiento.
-* Registro de series, peso y repeticiones.
-* Visualización de la última serie realizada de cada ejercicio.
-* Eliminación de ejercicios, sesiones y series con confirmación.
-* Persistencia de rutinas y orden de ejercicios.
-* Persistencia de sesiones y series.
-* Autenticación mediante Supabase.
-* Aislamiento de datos entre usuarios mediante Row Level Security (RLS).
-* Manejo de errores de conexión.
-* Adaptación de fechas y horarios a la zona horaria local del dispositivo.
+### Gestión de ejercicios
 
-## 🛠️ Stack tecnológico
+* Crear ejercicios.
+* Asignar un grupo muscular.
+* Agregar ejercicios a un día de la rutina semanal.
+* Consultar ejercicios por grupo muscular.
+* Eliminar ejercicios.
+* Iconos personalizados para los grupos musculares.
 
-* **Kotlin Multiplatform (KMP)**
-* **Compose Multiplatform**
-* **Kotlin Coroutines / Flow**
-* **MVVM**
-* **Repository Pattern**
-* **Supabase**
+Los grupos musculares no requieren una tabla independiente en Supabase: cada ejercicio mantiene su `muscle_group` y la aplicación utiliza ese valor para clasificarlo visualmente.
 
-  * Authentication
-  * PostgreSQL
-  * Row Level Security (RLS)
-* **Git / GitHub**
+### Rutina semanal
 
-La lógica compartida y la interfaz principal se encuentran en `commonMain`, permitiendo reutilizar el código entre Android e iOS.
+La rutina permite organizar los ejercicios por día de la semana y consultar rápidamente el entrenamiento planificado.
 
-## 🏗️ Arquitectura
+La información de la rutina se mantiene asociada al usuario mediante Supabase.
 
-El proyecto utiliza principalmente **MVVM + Repository Pattern**.
+### Sesiones y series
 
-flowchart TD
-    UI[Compose Multiplatform UI]
-    VM[ViewModels]
-    REPO[GymRepository]
-    REMOTE[RemoteGymRepository]
-    MOCK[MockGymRepository]
-    SUPA[Supabase]
+Cada ejercicio puede tener múltiples sesiones, y cada sesión puede contener múltiples series.
 
-    UI --> VM
-    VM --> REPO
-    REPO --> REMOTE
-    REPO --> MOCK
-    REMOTE --> SUPA
+La relación conceptual es:
 
-### UI
+```text
+Ejercicio
+    │
+    ├── Sesión
+    │     ├── Serie
+    │     ├── Serie
+    │     └── Serie
+    │
+    └── Sesión
+          ├── Serie
+          └── Serie
+```
 
-Las pantallas están implementadas con Compose Multiplatform y trabajan a partir del estado expuesto por los ViewModels.
+Una serie registra principalmente peso y repeticiones.
 
-Principales pantallas:
+### Funcionamiento offline
 
-* Login / Registro
-* Rutina semanal
-* Detalle de ejercicio y registro de sesiones/series
+La aplicación utiliza **SQLDelight + SQLite** como almacenamiento local.
 
-### ViewModels
+Actualmente se soporta:
 
-Los ViewModels gestionan el estado necesario para la UI y procesan los eventos provenientes de las pantallas.
+* Lectura offline de la rutina.
+* Lectura offline de ejercicios.
+* Lectura offline de sesiones y series.
+* Creación de sesiones sin Internet.
+* Creación de series sin Internet.
+* Eliminación offline de series.
+* Eliminación offline de sesiones.
+* Eliminación offline de ejercicios.
+* Persistencia local después de cerrar y volver a abrir la aplicación.
+* Sincronización con Supabase al recuperar conexión.
 
-La UI no accede directamente a Supabase.
+El flujo general es:
+
+```text
+                    ┌──────────────┐
+                    │   Supabase   │
+                    └──────┬───────┘
+                           │
+                    sincronización
+                           │
+┌──────┐            ┌──────▼───────┐
+│  UI  │ ◄───────── │  Repository  │
+└──┬───┘             └──────┬───────┘
+   │                        │
+   │                  ┌─────▼─────┐
+   └─────────────────►│ SQLDelight│
+                      │  / SQLite │
+                      └───────────┘
+```
+
+La lectura local permite que la aplicación siga mostrando información previamente almacenada aunque Supabase no esté disponible.
+
+Cuando vuelve Internet, las operaciones pendientes se sincronizan utilizando los mismos identificadores locales para evitar duplicados.
+
+---
+
+## 🧱 Arquitectura
+
+El proyecto utiliza **Kotlin Multiplatform + Compose Multiplatform**, compartiendo la mayor parte de la lógica entre plataformas.
+
+La aplicación se estructura aproximadamente de la siguiente manera:
+
+```text
+UI
+│
+├── WeeklyRoutineScreen
+└── ExerciseDetailScreen
+        │
+        ▼
+ViewModel
+        │
+        ▼
+Repository
+        │
+        ├───────────────► Supabase
+        │
+        └───────────────► LocalGymDataSource
+                                │
+                                ▼
+                            SQLDelight
+                                │
+                                ▼
+                              SQLite
+```
+
+### Presentación
+
+La interfaz está implementada con **Compose Multiplatform**.
+
+Los ViewModels se encargan de mantener el estado que consume la UI y de coordinar las operaciones de negocio sin que las pantallas tengan que conocer directamente Supabase o SQLDelight.
 
 ### Repository
 
-La interfaz `GymRepository` abstrae el acceso a los datos.
+`RemoteGymRepository` centraliza la comunicación con el backend y coordina:
 
-Esto permite mantener separada la capa de presentación de la implementación concreta utilizada para obtener y guardar información.
+* consultas remotas;
+* persistencia local;
+* manejo de datos offline;
+* sincronización;
+* creación y eliminación de entidades.
 
-Actualmente existen implementaciones remota y mock, lo que facilita el desarrollo y las pruebas.
+Esto evita que la UI dependa directamente de la infraestructura de persistencia.
 
-### Supabase
+### Persistencia local
 
-`RemoteGymRepository` se encarga de interactuar con Supabase y mantener sincronizado el estado de la aplicación con los datos persistidos.
+`LocalGymDataSource` encapsula el acceso a SQLDelight.
 
-## 🌐 Backend y persistencia
+La base local incluye entidades para:
+
+* ejercicios;
+* sesiones;
+* series;
+* rutina del usuario.
+
+Las consultas SQL están definidas mediante archivos `.sq` y SQLDelight genera las interfaces Kotlin correspondientes.
+
+---
+
+## 🗄️ Backend y datos
 
 VexorGym utiliza **Supabase** como backend.
 
-### Supabase Auth
+Supabase se utiliza para:
 
-Se utiliza para:
-
-* registro de usuarios;
-* inicio de sesión;
-* restauración de sesión.
-
-### PostgreSQL
-
-La base de datos almacena la información relacionada con:
-
+* autenticación;
 * usuarios;
 * ejercicios;
 * sesiones;
 * series;
-* rutinas.
+* rutina semanal;
+* persistencia remota;
+* sincronización.
 
-El orden y organización de las rutinas se persisten para que los cambios sobrevivan al cierre de sesión y a la recarga de la aplicación.
+### Relaciones principales
 
-### Row Level Security
+```text
+User
+ │
+ ├── Exercises
+ │      │
+ │      └── Sessions
+ │             │
+ │             └── Sets
+ │
+ └── Weekly Routine
+          │
+          └── Exercise IDs
+```
 
-La aplicación utiliza políticas de **Row Level Security (RLS)** para garantizar que un usuario solamente pueda acceder y modificar sus propios datos.
+Los registros locales se asocian al `user_id` correspondiente para evitar mezclar información entre diferentes cuentas en el mismo dispositivo.
 
-El identificador del usuario autenticado se utiliza como parte del control de acceso a los registros.
+---
 
-## 🔄 Gestión del estado
+## 🔐 Autenticación
 
-La aplicación utiliza un flujo de estado unidireccional:
+La autenticación se realiza utilizando **Supabase Auth**.
 
-Usuario
-   ↓
-Evento de UI
-   ↓
-ViewModel
-   ↓
-Repository
-   ↓
-Supabase
-   ↓
-Nuevo estado
-   ↓
-UI
+El flujo incluye:
 
-Se tuvo especial cuidado con la identidad de los elementos de las listas de Compose para evitar que los estados de ejercicios o series se mezclen durante recomposiciones, inserciones o eliminaciones.
+* Registro.
+* Inicio de sesión.
+* Persistencia de sesión.
+* Recuperación de contraseña.
+* Cambio de contraseña.
+* Deep links asociados al proceso de recuperación.
 
-Las listas utilizan claves estables para preservar correctamente la identidad de cada elemento.
+Los enlaces inválidos o expirados se manejan sin provocar un cierre inesperado de la aplicación.
 
-## 📶 Manejo de errores y conexión
+---
 
-La aplicación contempla errores de red y operaciones que requieren comunicación con Supabase.
+## 🎨 UI / UX
 
-Cuando una operación no puede completarse por falta de conexión:
+La interfaz está diseñada buscando simplicidad y velocidad de uso.
 
-* la aplicación no debe cerrarse;
-* se informa al usuario mediante un mensaje comprensible;
-* se evita dejar la interfaz en un estado inconsistente.
+Se utilizaron recursos gráficos personalizados para los grupos musculares, por ejemplo:
 
-Además, se diferencian los errores de conectividad de otros errores de aplicación para facilitar su diagnóstico.
+```text
+ic_pecho.png
+ic_pierna.png
+ic_bicep.png
+ic_tricep.png
+ic_espalda.png
+ic_hombro.png
+ic_gemelos.png
+ic_femoral.png
+ic_gluteo.png
+```
+
+Estos recursos se utilizan de forma consistente en las distintas vistas donde se representa visualmente el grupo muscular.
+
+La aplicación utiliza una navegación clara entre:
+
+* autenticación;
+* rutina semanal;
+* selección/consulta de ejercicios;
+* detalle del ejercicio;
+* sesiones y series.
+
+---
 
 ## 🤖 Uso de Inteligencia Artificial
 
-El uso de herramientas de Inteligencia Artificial fue una parte fundamental del proceso de desarrollo y estuvo alineado con el objetivo del challenge.
+El uso de IA fue una parte central del desarrollo y siguió el enfoque solicitado por el challenge.
 
-Se utilizaron **Gemini y ChatGPT** como herramientas de pair programming y asistencia técnica para acelerar diferentes etapas del desarrollo.
+### Herramientas utilizadas
 
-Entre las tareas en las que se utilizaron se encuentran:
+**Android Studio Gemini Agent**
 
-* generación y revisión de componentes de Compose Multiplatform;
-* implementación y depuración de estados de UI;
-* integración con Supabase;
-* diseño y revisión de consultas SQL;
-* configuración y revisión de políticas RLS;
-* resolución de problemas de persistencia;
-* implementación y depuración del drag & drop;
-* análisis de errores de recomposición;
-* manejo de errores de red;
-* revisión de arquitectura y separación de responsabilidades.
+Se utilizó principalmente para:
+
+* generar y modificar código;
+* implementar funcionalidades;
+* realizar refactors;
+* trabajar sobre Compose Multiplatform;
+* integrar Supabase;
+* implementar SQLDelight;
+* analizar errores de compilación;
+* diagnosticar crashes;
+* realizar cambios de UI.
+
+**ChatGPT**
+
+Se utilizó como herramienta de apoyo para:
+
+* diseñar la arquitectura;
+* dividir funcionalidades en etapas;
+* elaborar prompts específicos para el agente;
+* revisar decisiones de implementación;
+* analizar errores y logs;
+* identificar posibles problemas de sincronización;
+* definir estrategias de persistencia offline;
+* realizar QA sobre los cambios generados.
 
 ### Proceso de trabajo con IA
 
-La IA no se utilizó como mecanismo de generación automática sin revisión.
+La IA no fue utilizada como mecanismo de copy-paste directo.
 
-El proceso fue iterativo:
+El flujo de trabajo fue:
 
-Problema
-   ↓
-Definición del comportamiento esperado
-   ↓
-Asistencia de IA
-   ↓
-Revisión del código generado
-   ↓
-Compilación
-   ↓
-Pruebas funcionales
-   ↓
-Detección de errores
-   ↓
-Nueva iteración / corrección
+```text
+Definir funcionalidad
+       ↓
+Diseñar estrategia
+       ↓
+Crear prompt específico
+       ↓
+Agente implementa
+       ↓
+Revisar cambios
+       ↓
+Compilar
+       ↓
+Probar funcionalidad
+       ↓
+Detectar errores
+       ↓
+Corregir
+       ↓
+Commit
+```
 
+Una parte importante del trabajo consistió en detectar problemas introducidos durante la generación automática, especialmente relacionados con:
 
-Un ejemplo concreto fue el reordenamiento de ejercicios. Las primeras implementaciones mantenían el nuevo orden únicamente en memoria. Después de detectar el problema durante las pruebas, se revisó el flujo completo entre UI, ViewModel, Repository y Supabase y se implementó la persistencia del orden.
+* recomposición de Compose;
+* navegación;
+* persistencia local;
+* esquemas de SQLDelight;
+* sincronización Supabase/SQLite;
+* aislamiento entre usuarios;
+* operaciones offline.
 
-También se utilizaron asistentes de IA para investigar y resolver problemas relacionados con la identidad de elementos en listas de Compose, evitando que los valores de diferentes series se mezclaran durante las recomposiciones.
+---
 
-La responsabilidad de validar el resultado, detectar errores y decidir qué soluciones adoptar permaneció del lado del desarrollador.
+## 🧪 QA y pruebas
 
-## 🧪 QA
+La aplicación fue probada manualmente durante el desarrollo utilizando diferentes escenarios.
 
-Durante el desarrollo se probaron distintos escenarios funcionales, entre ellos:
+### Conectividad
 
-* creación y eliminación de ejercicios;
-* creación y eliminación de sesiones;
-* creación y eliminación de series;
-* reordenamiento de ejercicios;
-* persistencia del orden de las rutinas;
-* cierre y restauración de sesión;
-* múltiples series dentro de una sesión;
-* selección correcta de la última serie;
-* comportamiento sin conexión;
-* errores de red;
-* aislamiento de datos entre usuarios.
+Se probaron escenarios con:
 
-Las pruebas manuales se utilizaron especialmente para validar los casos donde una implementación generada inicialmente por IA no se comportaba como se esperaba.
+* Internet disponible.
+* Modo avión.
+* Cierre y reapertura de la aplicación sin conexión.
+* Recuperación de conexión.
+* Sincronización posterior.
+
+### Persistencia offline
+
+Se verificó que los datos creados offline permanecieran después de:
+
+```text
+Crear información
+    ↓
+Cerrar aplicación
+    ↓
+Abrir nuevamente sin Internet
+    ↓
+Consultar información
+```
+
+### Sincronización
+
+Se verificó que:
+
+* sesiones creadas offline llegaran posteriormente a Supabase;
+* series creadas offline llegaran posteriormente a Supabase;
+* eliminaciones realizadas offline se sincronizaran;
+* no se generaran duplicados;
+* los datos locales pendientes no se perdieran cuando una operación de red fallaba.
+
+### Cuentas
+
+Se verificó el aislamiento de datos locales mediante `user_id`, de manera que los datos pertenecientes a una cuenta no sean utilizados por otra cuenta en el mismo dispositivo.
+
+### Git
+
+El desarrollo se realizó utilizando commits frecuentes y separados por funcionalidades, por ejemplo:
+
+```text
+Integracion SQLDelight para uso offline
+Lecturas locales
+Visualizacion local
+escritura offline de series
+escritura offline de sesiones
+Sincronizar offline con supabase
+eliminar offline sincronizado
+eliminar ejercicio offline sincronizado
+```
+
+Esto permite identificar y recuperar puntos funcionales del desarrollo en lugar de depender de un único commit final.
+
+---
 
 ## 📱 Plataformas
 
-El proyecto está desarrollado con Kotlin Multiplatform y Compose Multiplatform.
+El proyecto utiliza:
 
-shared/
-├── commonMain/
-│   └── Kotlin compartido
-└── iosMain/
-    └── integración iOS
+* Kotlin Multiplatform.
+* Compose Multiplatform.
+* Android.
+* iOS.
 
-androidApp/
-└── integración Android
+La lógica compartida se encuentra principalmente dentro del módulo `shared`.
 
-iosApp/
-└── proyecto Xcode
+La entrega del challenge incluye el **APK instalable de Android** solicitado.
 
-La mayor parte de la lógica y de la UI se mantiene en código compartido.
+La validación funcional para la entrega se realizó principalmente sobre Android.
+
+---
 
 ## 🚀 Cómo ejecutar el proyecto
 
 ### Requisitos
 
-* Android Studio
-* JDK compatible con la versión de Gradle/Kotlin utilizada por el proyecto
-* Xcode para ejecutar la versión iOS
-* Cuenta/proyecto de Supabase correctamente configurado
+* Android Studio.
+* JDK compatible con la configuración actual del proyecto.
+* Android SDK.
+* Git.
+* Cuenta/proyecto de Supabase configurado.
 
-### Clonar el repositorio
+### Clonar el proyecto
 
-git clone https://github.com/TU_USUARIO/VexorGym.git
+```bash
+git clone <URL_DEL_REPOSITORIO>
 cd VexorGym
+```
 
-### Configuración de Supabase
+### Configurar Supabase
 
-El proyecto requiere la configuración correspondiente al proyecto de Supabase utilizado por la aplicación.
+Crear/configurar un proyecto de Supabase y proporcionar a la aplicación las credenciales utilizadas por el proyecto.
 
-No se deben incluir claves privadas ni secretos dentro del repositorio.
+**No incluir credenciales privadas en el repositorio.**
 
-La configuración necesaria debe proporcionarse mediante el mecanismo de configuración utilizado por el proyecto.
+La configuración debe contener como mínimo los datos necesarios para conectarse al proyecto Supabase utilizado por VexorGym.
 
-Además, la base de datos debe contener las tablas y políticas RLS necesarias para ejecutar correctamente la aplicación.
+### Ejecutar Android
 
-### Android
+Desde Android Studio:
 
-Abrir el proyecto en Android Studio, sincronizar Gradle y ejecutar la configuración Android correspondiente.
+```text
+Seleccionar configuración Android
+        ↓
+Seleccionar dispositivo/emulador
+        ↓
+Run
+```
 
-### iOS
+También puede generarse el APK Debug mediante Gradle:
 
-Abrir `iosApp` mediante Xcode, resolver las dependencias y ejecutar el proyecto en un simulador o dispositivo compatible.
+```powershell
+.\gradlew :androidApp:assembleDebug
+```
 
-## 📂 Estructura general
+El APK generado puede instalarse en un dispositivo Android para realizar las pruebas funcionales.
 
-VexorGym/
-├── shared/
-│   └── src/
-│       ├── commonMain/
-│       │   └── kotlin/
-│       │       ├── ui/
-│       │       ├── viewmodel/
-│       │       ├── repository/
-│       │       └── model/
-│       └── iosMain/
-│
-├── androidApp/
-│
-├── iosApp/
-│
-├── gradle/
-│
-└── README.md
+---
+
+## ⚠️ Limitaciones conocidas
+
+### Creación de ejercicios sin Internet
+
+La versión entregada permite utilizar gran parte de la aplicación offline, pero **la creación de ejercicios sin conexión no forma parte de la versión final entregada**.
+
+La creación de ejercicios requiere conexión para persistirse en Supabase.
+
+### Migraciones históricas de SQLDelight
+
+La persistencia local utiliza SQLDelight/SQLite.
+
+La infraestructura de migraciones históricas del esquema local se encuentra como una mejora pendiente de completar para cubrir de forma integral todas las actualizaciones futuras del esquema.
+
+Por este motivo, durante el desarrollo puede ser necesario reinstalar la aplicación si una modificación del esquema local no está contemplada por una migración existente.
+
+La versión entregada fue validada mediante instalación limpia del APK.
+
+### Tests automatizados / CI
+
+La versión entregada priorizó la implementación funcional y el QA manual dentro del tiempo disponible.
+
+No se incluyó una suite amplia de tests unitarios ni un pipeline de CI completo.
+
+---
+
+## 🔮 Mejoras futuras
+
+Algunas mejoras que podrían incorporarse posteriormente:
+
+* Finalizar y ampliar las migraciones de SQLDelight para todas las evoluciones futuras del esquema.
+* Soporte completo para creación de ejercicios offline.
+* Tests unitarios y de integración para el Repository.
+* Tests automatizados de sincronización offline.
+* CI para compilación y validación automática.
+* Mejoras adicionales en el manejo de conflictos entre dispositivos.
+* Observabilidad y logging estructurado para operaciones de sincronización.
+* Mejoras adicionales de accesibilidad.
+
+---
 
 ## 📸 Capturas
 
-Se recomienda incluir capturas de las principales pantallas:
+### Login
 
-* Login
-  
-  <img width="350" height="792" alt="image" src="https://github.com/user-attachments/assets/dc87763a-0db7-4719-9be7-efb93340389b" />
-  
-* Rutina semanal
-  
-  <img width="353" height="791" alt="image" src="https://github.com/user-attachments/assets/57d8c7ff-61bb-44b4-b9ae-9f016dbb4a63" />
-  
-* Detalle del ejercicio
-  
-  <img width="351" height="788" alt="image" src="https://github.com/user-attachments/assets/e91924a6-23c5-4789-bb66-6e8157eeadf2" />
+`<img width="354" height="790" alt="image" src="https://github.com/user-attachments/assets/0106ea57-a394-4828-84d5-7ce742e03f66" />
+`
 
-* Eliminar ejercicio
-  
-  <img width="353" height="790" alt="image" src="https://github.com/user-attachments/assets/32af75b3-5879-4ec9-a278-dda2c4e880ba" />
+### Rutina semanal
 
-## 📦 APK
+`<img width="323" height="719" alt="image" src="https://github.com/user-attachments/assets/fb6b77fd-bda9-4d61-93a1-69c67bfc1ff1" />
+`
 
-La versión Android instalable se encuentra disponible en la sección **Releases** de este repositorio.
+### Detalle del ejercicio
 
-[Descargar última versión][(https://github.com/TU_USUARIO/VexorGym/releases/latest)](https://github.com/samuu1i/VexorGym/releases/tag/v1.0.0)
+`<img width="324" height="721" alt="image" src="https://github.com/user-attachments/assets/f0f88b9b-a859-4353-a32c-fc7b0faf1374" />
+`
 
-## 🔮 Posibles mejoras futuras
+---
 
-Entre las posibles mejoras futuras se encuentran:
+## 📄 Licencia
 
-* Poder utilizar la aplicación de manera offline
-
-## 👨‍💻 Autor
-
-**Samuel Gallardo**
-
-Proyecto desarrollado como parte del challenge técnico de **AranguriApps**.
+Proyecto desarrollado con fines educativos y como parte del proceso de selección de AranguriApps.
