@@ -496,18 +496,15 @@ Algunas mejoras que podrían incorporarse posteriormente:
 
 ### Login
 
-`<img width="354" height="790" alt="image" src="https://github.com/user-attachments/assets/0106ea57-a394-4828-84d5-7ce742e03f66" />
-`
+<img width="354" height="790" alt="image" src="https://github.com/user-attachments/assets/0106ea57-a394-4828-84d5-7ce742e03f66" />
 
 ### Rutina semanal
 
-`<img width="323" height="719" alt="image" src="https://github.com/user-attachments/assets/fb6b77fd-bda9-4d61-93a1-69c67bfc1ff1" />
-`
+<img width="323" height="719" alt="image" src="https://github.com/user-attachments/assets/fb6b77fd-bda9-4d61-93a1-69c67bfc1ff1" />
 
 ### Detalle del ejercicio
 
-`<img width="324" height="721" alt="image" src="https://github.com/user-attachments/assets/f0f88b9b-a859-4353-a32c-fc7b0faf1374" />
-`
+<img width="324" height="721" alt="image" src="https://github.com/user-attachments/assets/f0f88b9b-a859-4353-a32c-fc7b0faf1374" />
 
 ---
 
