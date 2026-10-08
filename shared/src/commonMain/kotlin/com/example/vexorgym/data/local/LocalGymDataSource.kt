@@ -94,14 +94,16 @@ class LocalGymDataSource(private val db: GymDatabase) {
                     id = exercise.id,
                     user_id = userId,
                     name = exercise.name,
-                    muscle_group = exercise.muscleGroup
+                    muscle_group = exercise.muscleGroup,
+                    is_deleted = 0L
                 )
                 exercise.sessions.forEach { session ->
                     queries.insertOrReplaceSession(
                         id = session.id,
                         exercise_id = exercise.id,
                         date_created = session.dateCreated,
-                        is_pending = if (session.isPending) 1L else 0L
+                        is_pending = if (session.isPending) 1L else 0L,
+                        is_deleted = if (session.isDeleted) 1L else 0L
                     )
                     session.sets.forEach { set ->
                         queries.insertOrReplaceSet(
@@ -125,9 +127,18 @@ class LocalGymDataSource(private val db: GymDatabase) {
                 id = exercise.id,
                 user_id = userId,
                 name = exercise.name,
-                muscle_group = exercise.muscleGroup
+                muscle_group = exercise.muscleGroup,
+                is_deleted = 0L
             )
         }
+    }
+
+    suspend fun markExerciseAsDeleted(id: String) = withContext(Dispatchers.IO) {
+        queries.markExerciseAsDeleted(id)
+    }
+
+    suspend fun getPendingDeletedExercises(userId: String): List<String> = withContext(Dispatchers.IO) {
+        queries.getPendingDeletedExercisesByUserId(userId).executeAsList()
     }
 
     suspend fun deleteExercise(id: String) = withContext(Dispatchers.IO) {
@@ -140,7 +151,8 @@ class LocalGymDataSource(private val db: GymDatabase) {
                 id = session.id,
                 exercise_id = session.exerciseId,
                 date_created = session.dateCreated,
-                is_pending = if (session.isPending) 1L else 0L
+                is_pending = if (session.isPending) 1L else 0L,
+                is_deleted = if (session.isDeleted) 1L else 0L
             )
             session.sets.forEach { set ->
                 queries.insertOrReplaceSet(
@@ -170,6 +182,14 @@ class LocalGymDataSource(private val db: GymDatabase) {
             is_pending = if (set.isPending) 1L else 0L,
             is_deleted = if (set.isDeleted) 1L else 0L
         )
+    }
+
+    suspend fun markSessionAsDeleted(sessionId: String) = withContext(Dispatchers.IO) {
+        queries.markSessionAsDeleted(sessionId)
+    }
+
+    suspend fun getPendingDeletedSessions(userId: String): List<String> = withContext(Dispatchers.IO) {
+        queries.getPendingDeletedSessionsByUserId(userId).executeAsList()
     }
 
     suspend fun markSetAsDeleted(setId: String) = withContext(Dispatchers.IO) {

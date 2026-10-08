@@ -232,11 +232,12 @@ class RemoteGymRepository(
     }
 
     private suspend fun saveRoutine(newMap: Map<WeekDay, List<String>>) {
+        val uid = client.auth.currentUserOrNull()?.id ?: return
         try {
-            val uid = client.auth.currentUserOrNull()?.id ?: return
             client.from("user_routines").upsert(UserRoutine(userId = uid, routineData = newMap))
             localDataSource?.saveUserRoutine(uid, newMap)
         } catch (e: Exception) {
+            localDataSource?.saveUserRoutine(uid, newMap)
             println("Error saving routine: ${e.message}")
         }
     }
@@ -330,6 +331,20 @@ class RemoteGymRepository(
             saveRoutine(newMap)
             Result.success(Unit)
         } catch (error: Exception) {
+            val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
+            if (isNetworkError) {
+                try {
+                    localDataSource?.markExerciseAsDeleted(exerciseId)
+                    mutex.withLock {
+                        exercisesCache.update { current -> current - exerciseId }
+                    }
+                    saveRoutine(newMap)
+                    return Result.success(Unit)
+                } catch (e: Exception) {
+                    // Fallback to rollback
+                }
+            }
+            
             routineMeta.value = currentMeta
             Result.failure(handleNetworkError(error, "Error al eliminar el ejercicio"))
         } finally {
@@ -442,6 +457,21 @@ class RemoteGymRepository(
             localDataSource?.deleteSession(sessionId)
             Result.success(Unit)
         } catch (error: Exception) {
+            val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
+            
+            if (isNetworkError) {
+                try {
+                    if (capturedSession.isPending) {
+                        localDataSource?.deleteSession(sessionId)
+                    } else {
+                        localDataSource?.markSessionAsDeleted(sessionId)
+                    }
+                    return Result.success(Unit)
+                } catch (e: Exception) {
+                    // Fallback to rollback
+                }
+            }
+            
             // 3. Rollback: Volvemos a insertar la sesión eliminada optimísticamente
             mutex.withLock {
                 exercisesCache.update { cache ->
@@ -626,12 +656,34 @@ class RemoteGymRepository(
     }
 
     private suspend fun syncPendingData(userId: String) {
+        // -1. Sincronizar eliminaciones de ejercicios
+        val pendingDeletedExercises = localDataSource?.getPendingDeletedExercises(userId) ?: emptyList()
+        for (exId in pendingDeletedExercises) {
+            try {
+                client.from("exercises").delete { filter { eq("id", exId) } }
+                localDataSource?.deleteExercise(exId)
+            } catch (e: Exception) {
+                // Si falla, se conserva
+            }
+        }
+
         // 0. Sincronizar eliminaciones de series
         val pendingDeletedSets = localDataSource?.getPendingDeletedSets(userId) ?: emptyList()
         for (setId in pendingDeletedSets) {
             try {
                 client.from("sets").delete { filter { eq("id", setId) } }
                 localDataSource?.deleteSet(setId)
+            } catch (e: Exception) {
+                // Si falla, se conserva
+            }
+        }
+        
+        // 0.1 Sincronizar eliminaciones de sesiones
+        val pendingDeletedSessions = localDataSource?.getPendingDeletedSessions(userId) ?: emptyList()
+        for (sessionId in pendingDeletedSessions) {
+            try {
+                client.from("sessions").delete { filter { eq("id", sessionId) } }
+                localDataSource?.deleteSession(sessionId)
             } catch (e: Exception) {
                 // Si falla, se conserva
             }

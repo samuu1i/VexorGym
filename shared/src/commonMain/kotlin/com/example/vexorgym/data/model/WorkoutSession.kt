@@ -13,6 +13,7 @@ data class WorkoutSession(
     val sets: List<WorkoutSet> = emptyList(),
     @Transient val createdAtMillis: Long = parsePostgresTimestamp(dateCreated),
     @Transient val isPending: Boolean = false,
+    @Transient val isDeleted: Boolean = false,
 )
 
 internal fun parsePostgresTimestamp(value: String?): Long {
