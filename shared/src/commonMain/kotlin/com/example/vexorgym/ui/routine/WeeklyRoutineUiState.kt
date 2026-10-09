@@ -16,7 +16,15 @@ data class WeeklyRoutineUiState(
 
     val exercisesNotOnSelectedDay: List<Exercise>
         get() {
-            val assignedIds = selectedExercises.map { it.id }.toSet()
-            return catalog.filter { it.id !in assignedIds }
+            val assignedSignatures = selectedExercises.map { 
+                "${it.name.lowercase().trim()}|${it.muscleGroup.lowercase().trim()}" 
+            }.toSet()
+            
+            return catalog.filter { 
+                val sig = "${it.name.lowercase().trim()}|${it.muscleGroup.lowercase().trim()}"
+                sig !in assignedSignatures 
+            }.distinctBy { 
+                "${it.name.lowercase().trim()}|${it.muscleGroup.lowercase().trim()}" 
+            }
         }
 }

@@ -317,26 +317,34 @@ class RemoteGymRepository(
         // 2. Actualización optimista
         routineMeta.value = newMeta
         
+        // 3. Verificamos si sigue en uso en otros días
+        val isUsedElsewhere = newMap.any { (_, ids) -> exerciseId in ids }
+        
         return try {
-            // Borramos el ejercicio de la base de datos de Supabase.
-            // Gracias a ON DELETE CASCADE, también se borran sus sesiones y series.
-            client.from("exercises").delete { filter { eq("id", exerciseId) } }
-            
-            localDataSource?.deleteExercise(exerciseId)
-            
-            // Si la base de datos respondió OK, eliminamos localmente del caché para no verlo más
-            mutex.withLock {
-                exercisesCache.update { current -> current - exerciseId }
+            if (!isUsedElsewhere) {
+                // Borramos el ejercicio de la base de datos de Supabase.
+                // Gracias a ON DELETE CASCADE, también se borran sus sesiones y series.
+                client.from("exercises").delete { filter { eq("id", exerciseId) } }
+                
+                localDataSource?.deleteExercise(exerciseId)
+                
+                // Si la base de datos respondió OK, eliminamos localmente del caché para no verlo más
+                mutex.withLock {
+                    exercisesCache.update { current -> current - exerciseId }
+                }
             }
+            
             saveRoutine(newMap)
             Result.success(Unit)
         } catch (error: Exception) {
             val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
             if (isNetworkError) {
                 try {
-                    localDataSource?.markExerciseAsDeleted(exerciseId)
-                    mutex.withLock {
-                        exercisesCache.update { current -> current - exerciseId }
+                    if (!isUsedElsewhere) {
+                        localDataSource?.markExerciseAsDeleted(exerciseId)
+                        mutex.withLock {
+                            exercisesCache.update { current -> current - exerciseId }
+                        }
                     }
                     saveRoutine(newMap)
                     return Result.success(Unit)

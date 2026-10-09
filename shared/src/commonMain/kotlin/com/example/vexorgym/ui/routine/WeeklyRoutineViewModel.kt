@@ -55,32 +55,16 @@ class WeeklyRoutineViewModel(
     }
 
     fun addExistingExercise(exerciseId: String) {
-        val day = _uiState.value.selectedDay
-        viewModelScope.launch {
-            repository.addExerciseToDay(day, exerciseId)
-                .onFailure { error ->
-                    _uiState.update {
-                        it.copy(actionError = error.message ?: "No se pudo agregar el ejercicio.")
-                    }
-                }
-                .onSuccess {
-                    _uiState.update { it.copy(actionError = null) }
-                }
+        val existing = _uiState.value.catalog.find { it.id == exerciseId }
+        if (existing != null) {
+            createExercise(existing.name, existing.muscleGroup)
+        } else {
+            _uiState.update { it.copy(actionError = "Ejercicio no encontrado.") }
         }
     }
     
     fun addExerciseFromCatalog(name: String, muscleGroup: String) {
-        val day = _uiState.value.selectedDay
-        // Buscamos si el usuario ya lo tiene en su base de datos personal
-        val existing = _uiState.value.catalog.find { 
-            it.name.equals(name, ignoreCase = true) && it.muscleGroup.equals(muscleGroup, ignoreCase = true) 
-        }
-        
-        if (existing != null) {
-            addExistingExercise(existing.id)
-        } else {
-            createExercise(name, muscleGroup)
-        }
+        createExercise(name, muscleGroup)
     }
 
     fun createExercise(name: String, muscleGroup: String) {
