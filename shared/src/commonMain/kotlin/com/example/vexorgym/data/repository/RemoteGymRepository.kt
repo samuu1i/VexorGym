@@ -238,7 +238,7 @@ class RemoteGymRepository(
             localDataSource?.saveUserRoutine(uid, newMap)
         } catch (e: Exception) {
             localDataSource?.saveUserRoutine(uid, newMap)
-            println("Error saving routine: ${e.message}")
+            localDataSource?.savePendingRoutine(uid, newMap)
         }
     }
 
@@ -268,31 +268,38 @@ class RemoteGymRepository(
             return Result.failure(IllegalArgumentException("El nombre del ejercicio no puede estar vacío."))
         }
         val finalGroup = muscleGroup.trim().ifEmpty { "General" }
+        
+        val newId = generateUUID()
+        val optimisticExercise = Exercise(id = newId, name = trimmedName, muscleGroup = finalGroup)
+        val uid = client.auth.currentUserOrNull()?.id
+        
+        var newMapToSave: Map<WeekDay, List<String>> = emptyMap()
+        mutex.withLock {
+            exercisesCache.update { cache -> cache + (newId to optimisticExercise) }
+            val ids = routineMeta.value.exerciseIdsByDay[day].orEmpty()
+            newMapToSave = routineMeta.value.exerciseIdsByDay + (day to ids + newId)
+            routineMeta.update { current ->
+                current.copy(exerciseIdsByDay = newMapToSave)
+            }
+        }
+        
+        if (uid != null) {
+            localDataSource?.savePendingExercise(uid, optimisticExercise)
+        }
+        saveRoutine(newMapToSave)
+        
         return try {
-            val created = client.from("exercises")
-                .insert(ExerciseInsert(name = trimmedName, muscleGroup = finalGroup)) {
-                    select()
-                }
-                .decodeSingle<Exercise>()
-                
-            val uid = client.auth.currentUserOrNull()?.id
-            if (uid != null) {
-                localDataSource?.saveExercise(uid, created)
-            }
-                
-            var newMapToSave: Map<WeekDay, List<String>>? = null
-            mutex.withLock {
-                exercisesCache.update { cache -> cache + (created.id to created) }
-                val ids = routineMeta.value.exerciseIdsByDay[day].orEmpty()
-                newMapToSave = routineMeta.value.exerciseIdsByDay + (day to ids + created.id)
-                routineMeta.update { current ->
-                    current.copy(exerciseIdsByDay = newMapToSave!!)
-                }
-            }
-            saveRoutine(newMapToSave!!)
+            client.from("exercises").insert(ExerciseInsert(id = newId, name = trimmedName, muscleGroup = finalGroup))
+            localDataSource?.markExerciseSynced(newId)
             Result.success(Unit)
         } catch (error: Exception) {
-            Result.failure(handleNetworkError(error, "Error al crear el ejercicio"))
+            val isNetworkError = error is HttpRequestException || error is kotlinx.io.IOException
+            if (isNetworkError) {
+                // Return success for offline mode
+                Result.success(Unit)
+            } else {
+                Result.failure(handleNetworkError(error, "Error al crear el ejercicio"))
+            }
         }
     }
 
@@ -674,8 +681,28 @@ class RemoteGymRepository(
                 // Si falla, se conserva
             }
         }
+        
+        // 0. Sincronizar creación de ejercicios pendientes
+        val pendingExercises = localDataSource?.getPendingExercises(userId) ?: emptyList()
+        for (ex in pendingExercises) {
+            try {
+                client.from("exercises").upsert(
+                    ExerciseInsert(id = ex.id, name = ex.name, muscleGroup = ex.muscleGroup)
+                )
+                localDataSource?.markExerciseSynced(ex.id)
+            } catch (e: Exception) {}
+        }
 
-        // 0. Sincronizar eliminaciones de series
+        // 0.1 Sincronizar rutina pendiente
+        val pendingRoutine = localDataSource?.getPendingRoutine(userId)
+        if (pendingRoutine != null) {
+            try {
+                client.from("user_routines").upsert(UserRoutine(userId = userId, routineData = pendingRoutine))
+                localDataSource?.clearPendingRoutine(userId)
+            } catch (e: Exception) {}
+        }
+
+        // 0.2 Sincronizar eliminaciones de series
         val pendingDeletedSets = localDataSource?.getPendingDeletedSets(userId) ?: emptyList()
         for (setId in pendingDeletedSets) {
             try {
@@ -835,6 +862,7 @@ private data class UserRoutine(
 
 @Serializable
 private data class ExerciseInsert(
+    val id: String,
     val name: String,
     @SerialName("muscle_group") val muscleGroup: String
 )

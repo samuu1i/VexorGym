@@ -132,6 +132,33 @@ class LocalGymDataSource(private val db: GymDatabase) {
             )
         }
     }
+    
+    suspend fun savePendingExercise(userId: String, exercise: Exercise) = withContext(Dispatchers.IO) {
+        queries.transaction {
+            queries.insertOrReplaceExercise(
+                id = exercise.id,
+                user_id = userId,
+                name = exercise.name,
+                muscle_group = exercise.muscleGroup,
+                is_deleted = 2L
+            )
+        }
+    }
+
+    suspend fun getPendingExercises(userId: String): List<Exercise> = withContext(Dispatchers.IO) {
+        queries.getPendingExercisesByUserId(userId).executeAsList().map { ext ->
+            Exercise(
+                id = ext.id,
+                name = ext.name,
+                muscleGroup = ext.muscle_group,
+                sessions = emptyList() // Pending exercises don't have sessions initially downloaded
+            )
+        }
+    }
+
+    suspend fun markExerciseSynced(id: String) = withContext(Dispatchers.IO) {
+        queries.markExerciseSynced(id)
+    }
 
     suspend fun markExerciseAsDeleted(id: String) = withContext(Dispatchers.IO) {
         queries.markExerciseAsDeleted(id)
@@ -207,6 +234,22 @@ class LocalGymDataSource(private val db: GymDatabase) {
     suspend fun saveUserRoutine(userId: String, routineData: Map<WeekDay, List<String>>) = withContext(Dispatchers.IO) {
         val json = Json.encodeToString(routineData)
         queries.insertOrReplaceUserRoutine(userId, json)
+    }
+
+    suspend fun savePendingRoutine(userId: String, routineData: Map<WeekDay, List<String>>) = withContext(Dispatchers.IO) {
+        val json = Json.encodeToString(routineData)
+        queries.insertOrReplaceUserRoutine("pending_$userId", json)
+    }
+
+    suspend fun getPendingRoutine(userId: String): Map<WeekDay, List<String>>? = withContext(Dispatchers.IO) {
+        val row = queries.getUserRoutine("pending_$userId").executeAsOneOrNull()
+        row?.let {
+            Json.decodeFromString(it.routine_data)
+        }
+    }
+
+    suspend fun clearPendingRoutine(userId: String) = withContext(Dispatchers.IO) {
+        queries.deleteUserRoutine("pending_$userId")
     }
     
     suspend fun clearUserRoutine(userId: String) = withContext(Dispatchers.IO) {

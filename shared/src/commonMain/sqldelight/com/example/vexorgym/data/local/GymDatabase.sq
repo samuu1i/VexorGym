@@ -37,7 +37,13 @@ INSERT OR REPLACE INTO exerciseEntity(id, user_id, name, muscle_group, is_delete
 VALUES (?, ?, ?, ?, ?);
 
 getExercisesByUserId:
-SELECT * FROM exerciseEntity WHERE user_id = ? AND is_deleted = 0;
+SELECT * FROM exerciseEntity WHERE user_id = ? AND is_deleted IN (0, 2);
+
+getPendingExercisesByUserId:
+SELECT * FROM exerciseEntity WHERE user_id = ? AND is_deleted = 2;
+
+markExerciseSynced:
+UPDATE exerciseEntity SET is_deleted = 0 WHERE id = ?;
 
 markExerciseAsDeleted:
 UPDATE exerciseEntity SET is_deleted = 1 WHERE id = ?;
@@ -49,7 +55,7 @@ deleteExerciseById:
 DELETE FROM exerciseEntity WHERE id = ?;
 
 deleteExercisesByUserId:
-DELETE FROM exerciseEntity WHERE user_id = ?;
+DELETE FROM exerciseEntity WHERE user_id = ? AND is_deleted = 0;
 
 -- Sessions
 insertOrReplaceSession:
