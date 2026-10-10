@@ -2,6 +2,7 @@ package com.example.vexorgym.ui.navigation
 
 object AppRoutes {
     const val LOGIN = "login"
+    const val REGISTER = "register"
     const val WEEKLY_ROUTINE = "weekly_routine"
     const val EXERCISE_DETAIL = "exercise/{exerciseId}"
     const val FORGOT_PASSWORD = "forgot_password"

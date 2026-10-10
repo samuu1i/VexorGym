@@ -46,7 +46,7 @@ class LoginViewModel(
 
         val email = current.email.trim()
         val password = current.password
-        val validationError = validateCredentials(email, password)
+        val validationError = validateCredentials(email, password, isRegister = false)
         if (validationError != null) {
             _uiState.update { it.copy(errorMessage = validationError) }
             return
@@ -75,7 +75,7 @@ class LoginViewModel(
 
         val email = current.email.trim()
         val password = current.password
-        val validationError = validateCredentials(email, password)
+        val validationError = validateCredentials(email, password, isRegister = true)
         if (validationError != null) {
             _uiState.update { it.copy(errorMessage = validationError) }
             return
@@ -107,13 +107,17 @@ class LoginViewModel(
         }
     }
 
-    private fun validateCredentials(email: String, password: String): String? = when {
+    private fun validateCredentials(email: String, password: String, isRegister: Boolean): String? = when {
         !EMAIL_REGEX.matches(email) -> "Ingresá un email con formato válido."
         password.isBlank() -> "La contraseña no puede estar vacía."
+        isRegister && password.length < MIN_PASSWORD_LENGTH -> "La contraseña es demasiado corta. Debe tener al menos $MIN_PASSWORD_LENGTH caracteres."
         else -> null
     }
 
     private companion object {
         val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+        
+        // Constante alineada con la configuración predeterminada de longitud de contraseña de Supabase Auth
+        const val MIN_PASSWORD_LENGTH = 6
     }
 }

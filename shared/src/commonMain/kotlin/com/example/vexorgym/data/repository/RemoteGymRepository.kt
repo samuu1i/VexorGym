@@ -82,6 +82,17 @@ class RemoteGymRepository(
             is HttpRequestException, is kotlinx.io.IOException -> Exception("No hay conexión a Internet. Verificá tu conexión e intentá nuevamente.")
             is RestException -> {
                 val errorStr = e.error.lowercase()
+                val msg = e.description?.lowercase() ?: e.message?.lowercase() ?: ""
+                
+                if (errorStr.contains("weak_password") || msg.contains("weak_password")) {
+                    val match = Regex("""at least (\d+)""").find(msg)
+                    if (match != null) {
+                        val minChars = match.groupValues[1]
+                        return Exception("La contraseña es demasiado corta. Debe tener al menos $minChars caracteres.")
+                    }
+                    return Exception("La contraseña es débil o no cumple los requisitos de seguridad.")
+                }
+                
                 if (errorStr.contains("user_already_exist")) {
                     Exception("Este email ya está registrado. Intentá iniciar sesión.")
                 } else if (errorStr.contains("same_password") || errorStr.contains("different from the old password")) {
@@ -94,6 +105,14 @@ class RemoteGymRepository(
             }
             else -> {
                 val msg = e.message?.lowercase() ?: ""
+                if (msg.contains("weak_password")) {
+                    val match = Regex("""at least (\d+)""").find(msg)
+                    if (match != null) {
+                        val minChars = match.groupValues[1]
+                        return Exception("La contraseña es demasiado corta. Debe tener al menos $minChars caracteres.")
+                    }
+                    return Exception("La contraseña es débil o no cumple los requisitos de seguridad.")
+                }
                 if (msg.contains("same_password") || msg.contains("different from the old password")) {
                     Exception("La nueva contraseña debe ser diferente a tu contraseña actual.")
                 } else if (msg.contains("otp_expired") || msg.contains("invalid_token") || msg.contains("token_expired") || msg.contains("invalid token") || msg.contains("expired token") || msg.contains("invalid_grant")) {

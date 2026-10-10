@@ -49,8 +49,23 @@ fun AppNavHost(
                         popUpTo(AppRoutes.LOGIN) { inclusive = true }
                     }
                 },
+                onRegisterClick = {
+                    navController.navigate(AppRoutes.REGISTER)
+                },
                 onForgotPasswordClick = {
                     navController.navigate(AppRoutes.FORGOT_PASSWORD)
+                }
+            )
+        }
+        composable(AppRoutes.REGISTER) {
+            com.example.vexorgym.ui.login.RegisterRoute(
+                onRegisterSuccess = {
+                    navController.navigate(AppRoutes.WEEKLY_ROUTINE) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onBackToLoginClick = {
+                    navController.popBackStack()
                 }
             )
         }
